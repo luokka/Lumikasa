@@ -1272,7 +1272,7 @@ function InitializePlayer(player,newGame){
 			}
 		}
 		if(spawnPositions.length>0){
-			let randomSpot = Math.floor(Math.random() * (spawnPositions.length-1));
+			let randomSpot = Math.floor(Math.random() * spawnPositions.length);
 			spawnPosX += spawnPositions[randomSpot].x;
 			spawnPosY += spawnPositions[randomSpot].y;
 		}
