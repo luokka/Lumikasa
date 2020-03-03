@@ -1081,7 +1081,7 @@ function CheckGamepads(){
 	}
 }
 function CreateColData(imageData){
-	let colData = new Uint8Array(imageData.length >> 5); //Optimized boolean array (bitfield)
+	let colData = new Uint8Array(Math.ceil(imageData.length/32)); //Optimized boolean array (bitfield)
 	
 	let counter = 0;
 	let colValue = 0;
@@ -1090,7 +1090,7 @@ function CreateColData(imageData){
 		if(imageData[dataIndex]!==0) //colPoint if pixel alpha is not zero
 			colValue+=Math.pow(2,counter);
 		counter++;
-		if(counter===8){
+		if(counter===8 || dataIndex===imageData.length-1){ //last dataIndex accounts for resolutions not divisible by 8
 			colData[cellIndex]=colValue;
 			cellIndex++;
 			colValue=0;
@@ -1256,7 +1256,7 @@ function InitializePlayer(player,newGame){
 	let spawnPosY = levelPosY; //default for battleMode
 	if(gameMode===GameMode.battle){
 		let spawnPositions = [];
-		let colWidth = (levelCanvas.width >> 3); //divide by 8
+		let colWidth = Math.ceil(levelCanvas.width/8);
 		let colHeight = levelCanvas.height;
 		for(let cY = 0; cY < colHeight-31; cY+=8){ //finding all empty spots in the stage large enough for spawning (8x8 grid based, 32x32 minimum spawn area)
 			spawnSearchLoop2:
@@ -4238,45 +4238,6 @@ function HideMenu(element){
 	if(menuAnimating)
 		setTimeout(function(){HideMenu(element);}, 0);
 }
-function LogoDraw(){
-	let mouseIsDrawing = false;
-	let GLogo = GUI.logo;
-	if(mouseDraw!==-1){
-		GLogo.width = (GLogo.textWidth+GLogo.textXgap)*GLogo.data[0].length+GLogo.textXoffset;
-		GLogo.height = (GLogo.textHeight+GLogo.textYgap)*GLogo.data.length+GLogo.textYoffset;
-		
-		if(MouseOver(GLogo)){
-			let Ydis = mouseY-(scaledHeightHalf+GLogo.yDiff);
-			let Xdis = mouseX-(scaledWidthHalf+GLogo.xDiff);
-			let dataY = Math.floor(Ydis/GLogo.height*GLogo.data.length);
-			let dataX = Math.floor(Xdis/GLogo.width*GLogo.data[0].length);
-			
-			GLogo.data[dataY][dataX] = (mouseDraw===0) ? 1 : 0;
-			mouseIsDrawing = true;
-			//GLogo.secret=false; //not needed because there are almost always empty pixels in logo when secret is active
-		}
-	}
-	GLogo.border = (mouseDraw!==-1) ? 1 : 0;
-	
-	if(GLogo.secret || mouseIsDrawing){
-		GLogo.secret = GLogo.drawStarted;
-		for(let py = 0; py < GLogo.data.length; py++){
-			for(let px = 0; px < GLogo.data[py].length; px++){
-				if(!GLogo.drawStarted)
-					GLogo.data[py][px] = 0; //clear all pixels
-				else if(!mouseIsDrawing) //GLogo.secret is true
-					GLogo.data[py][px] = Math.floor(Math.random() * 2); //set random pixels
-				else if(GLogo.data[py][px]===0)
-					GLogo.secret = false;
-			}
-		}
-		GLogo.drawStarted = true;
-		if(GLogo.secret && mouseIsDrawing)
-			mouseDraw = -1;
-	}
-	
-	RenderOption(GLogo);
-}
 function PlayerConfirmWindow(){
 	for(let pl = 1; pl < Players.length; pl++){
 		let playerSlot = GUI.playerConfirm.background[pl-1];
@@ -4423,6 +4384,66 @@ function DebugInfo(){
 	guiRender.fillText("GUIScale: "+guiScale.toFixed(4)+" | "+screenWidth+"x"+screenHeight+" | Frame:"+totalFrameCount+" | Avg:"+fpsAvg.toFixed(2)+" | "+fps,scaledWidth-5,20);
 	guiRender.fillText("[X]guiScale: "+guiScaleOn+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
 }
+function LogoDraw(){
+	let mouseIsDrawing = false;
+	let GLogo = GUI.logo;
+	if(mouseDraw!==-1){
+		GLogo.width = (GLogo.textWidth+GLogo.textXgap)*GLogo.data[0].length+GLogo.textXoffset;
+		GLogo.height = (GLogo.textHeight+GLogo.textYgap)*GLogo.data.length+GLogo.textYoffset;
+		
+		if(MouseOver(GLogo)){
+			let Ydis = mouseY-(scaledHeightHalf+GLogo.yDiff);
+			let Xdis = mouseX-(scaledWidthHalf+GLogo.xDiff);
+			let dataY = Math.floor(Ydis/GLogo.height*GLogo.data.length);
+			let dataX = Math.floor(Xdis/GLogo.width*GLogo.data[0].length);
+			let newData = (mouseDraw===0) ? 1 : 0;
+			
+			if(GLogo.data[dataY][dataX] !== newData){
+				GLogo.data[dataY][dataX] = newData;
+				mouseIsDrawing = true;
+			}
+			//GLogo.secret=false; //not needed because there are almost always empty pixels in logo when secret is active
+		}
+	}
+	GLogo.border = (mouseDraw!==-1) ? 1 : 0;
+	
+	if(GLogo.secret || mouseIsDrawing){
+		GLogo.secret = GLogo.drawStarted;
+		for(let py = 0; py < GLogo.data.length; py++){
+			for(let px = 0; px < GLogo.data[py].length; px++){
+				if(!GLogo.drawStarted)
+					GLogo.data[py][px] = 0; //clear all pixels
+				else if(!mouseIsDrawing) //GLogo.secret is true
+					GLogo.data[py][px] = Math.floor(Math.random() * 2); //set random pixels
+				else if(GLogo.data[py][px]===0)
+					GLogo.secret = false;
+			}
+		}
+		GLogo.drawStarted = true;
+		if(GLogo.secret && mouseIsDrawing)
+			mouseDraw = -1;
+	}
+	if(mouseIsDrawing)
+		LogoSave();
+	
+	RenderOption(GLogo);
+}
+function LogoSave(){
+	if(GUI.logo.drawStarted){
+		localStorage.setItem('GUIlogo',JSON.stringify(GUI.logo.data));
+		localStorage.setItem('GUIsecret',GUI.logo.secret);
+	}
+}
+function LogoLoad(){
+	let loadedGUIlogo = JSON.parse(localStorage.getItem('GUIlogo'));
+	let loadedGUIsecret = localStorage.getItem('GUIsecret');
+	
+	if(loadedGUIlogo!==null){
+		GUI.logo.data = loadedGUIlogo;
+		GUI.logo.drawStarted = true;
+		GUI.logo.secret = (loadedGUIsecret==="true");
+	}
+}
 function SaveGame(){ //add exeption?: Can not save
 	localStorage.setItem('vsync',vsync);
 	localStorage.setItem('guiScaleOn',guiScaleOn);
@@ -4434,6 +4455,8 @@ function SaveGame(){ //add exeption?: Can not save
 	for(let pl = 1; pl < Players.length; pl++)
 		PlayerInputInfo.push({id:Players[pl].inputInfo.id, index:null}); //index not stored
 	localStorage.setItem('PlayerInputInfo',JSON.stringify(PlayerInputInfo));
+	
+	//LogoSave(); //not needed
 }
 function LoadGame(){
 	let loadedVsync = localStorage.getItem('vsync');
@@ -4475,6 +4498,8 @@ function LoadGame(){
 	}
 	
 	UpdateInputMethods(true);
+	
+	LogoLoad();
 }
 let initLevels = false;
 let previousWidth = 0;
@@ -4571,7 +4596,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x486",3,scaledHeight-3);
+	guiRender.fillText("Version 0x48C",3,scaledHeight-3);
 	
 	guiRender.fillText("- F, F4 or F11 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
