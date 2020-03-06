@@ -3286,7 +3286,7 @@ function NavigateGUI(direction){
 			
 			if(prevSelectedItem!==activeOption.selectedItem)
 				optionChanged = true;
-		} else
+		} else if(direction===Input.left || direction===Input.right)
 			SetAdjustBox(CurrentMenu(),activeOption,(direction===Input.left) ? false : true);
 	}
 	
@@ -4599,7 +4599,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x48D",3,scaledHeight-3);
+	guiRender.fillText("Version 0x48E",3,scaledHeight-3);
 	
 	guiRender.fillText("- F, F4 or F11 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
