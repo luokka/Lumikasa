@@ -4398,7 +4398,7 @@ function LogoDraw(){
 			let dataX = Math.floor(Xdis/GLogo.width*GLogo.data[0].length);
 			let newData = (mouseDraw===0) ? 1 : 0;
 			
-			if(GLogo.data[dataY][dataX] !== newData){
+			if(GLogo.data[dataY][dataX] !== newData || !GLogo.drawStarted){
 				GLogo.data[dataY][dataX] = newData;
 				mouseIsDrawing = true;
 			}
@@ -4599,7 +4599,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x48E",3,scaledHeight-3);
+	guiRender.fillText("Version 0x48F",3,scaledHeight-3);
 	
 	guiRender.fillText("- F, F4 or F11 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
