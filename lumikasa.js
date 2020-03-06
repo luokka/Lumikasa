@@ -4405,7 +4405,6 @@ function LogoDraw(){
 			//GLogo.secret=false; //not needed because there are almost always empty pixels in logo when secret is active
 		}
 	}
-	GLogo.border = (mouseDraw!==-1) ? 1 : 0;
 	
 	if(GLogo.secret || mouseIsDrawing){
 		GLogo.secret = GLogo.drawStarted;
@@ -4423,8 +4422,12 @@ function LogoDraw(){
 		if(GLogo.secret && mouseIsDrawing)
 			mouseDraw = -1;
 	}
-	if(mouseIsDrawing)
-		LogoSave();
+	let newBorder = (mouseDraw!==-1) ? 1 : 0;
+	if(GLogo.border !== newBorder){
+		GLogo.border = newBorder;
+		if(newBorder===0)
+			LogoSave();
+	}
 	
 	RenderOption(GLogo);
 }
@@ -4596,7 +4599,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x48C",3,scaledHeight-3);
+	guiRender.fillText("Version 0x48D",3,scaledHeight-3);
 	
 	guiRender.fillText("- F, F4 or F11 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
