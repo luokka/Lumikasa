@@ -754,7 +754,7 @@ document.addEventListener('keydown', function(event){
 		else {
 			if(event.code === "Escape" && document.fullscreenElement)
 				document.exitFullscreen();
-			else if(event.code === "KeyF" || event.code === "F4" || event.code === "F11"){ //F, F4 or F11 to enable fullscreen
+			else if(event.code === "KeyF" || event.code === "F4"){ //Enable fullscreen
 				if(document.fullscreenElement)
 					document.exitFullscreen();
 				else
@@ -929,10 +929,7 @@ gameCanvas.addEventListener('drop', function(event){
 					gameCanvas.style.backgroundImage = "url('"+URL.createObjectURL(file)+"')";
 			}
 		}
-	} /*else {
-		for(let i = 0; i < event.dataTransfer.files.length; i++)
-			console.log('... file2[' + i + '].name = ' + event.dataTransfer.files[i].name);
-	}*/
+	}
 });
 gameCanvas.addEventListener('dragover', function(event){
 	event.preventDefault();
@@ -944,7 +941,7 @@ gameCanvas.addEventListener('contextmenu', function(event){
 gameCanvas.addEventListener('click', function(event){
 	if(loadingScreen && loadingDone)
 		loadingScreen = false;
-	event.preventDefault(); //is this needed?
+	gameCanvas.focus();
 });
 gameCanvas.addEventListener('dblclick', function(event){
 	if(playerConfirm)
@@ -4599,9 +4596,9 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x48F",3,scaledHeight-3);
+	guiRender.fillText("Version 0x492",3,scaledHeight-3);
 	
-	guiRender.fillText("- F, F4 or F11 to enable fullscreen",3,20);
+	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
 	guiRender.fillText("- Add stages by dropping images at stage selection",3,70);
 	
