@@ -2956,7 +2956,7 @@ exitGame:{
 },
 results:{
 	run(){Results();},
-	title:{data:resultsText,xDiff:-450,yDiff:-155,width:278,height:75,textXoffset:13,textYoffset:8,targetWidth:900,targetHeight:400},
+	title:{data:resultsText,xDiff:-450,yDiff:-155,width:278,height:75,textXoffset:13,textYoffset:8,targetWidth:900,targetHeight:400, isOption:false},
 	background:[
 		{data:Numbers[1],xDiff:-380,yDiff:-65,width:160,height:230,border:3,textXoffset:63,textWidth:6,textHeight:5,textColor:playerTextColor,borderColor:PlayerColors[1].fadeColor,bgColor:PlayerColors[1].color,
 			label:[{data:null,textYoffset:10,textBorder:2,textColor:optionTextHighlightColor}]
@@ -3034,10 +3034,12 @@ function AddDefaultProperties(element, elementType, parent, menu=null){
 	element.type==="inputfield" ||
 	element.type==="dropdown" ||
 	element.type==="stagebutton"){ //dropdown item?
-		element.isOption = true;
-		if(!menu.hasOwnProperty("options"))
-			menu.options = [];
-		menu.options.push(element);
+		if(!element.hasOwnProperty("isOption") || element.isOption){
+			element.isOption = true;
+			if(!menu.hasOwnProperty("options"))
+				menu.options = [];
+			menu.options.push(element);
+		}
 	} else
 		element.isOption = false;
 	
@@ -4596,7 +4598,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x492",3,scaledHeight-3);
+	guiRender.fillText("Version 0x493",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
