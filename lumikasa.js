@@ -257,6 +257,7 @@ for(let i = 0; i <= 4; i++){
 		score:0,
 		sizeLevel:0,
 		Sounds:{
+			charge:new Audio(Sounds.charge.src),
 			death:new Audio(Sounds.death.src)
 		},
 		statusVisibility:0,
@@ -1326,30 +1327,29 @@ function ChangeSize(change, player){
 	}
 }
 function CreateShot(player){
-	player.Balls.push({
-		canvas:null,
-		render:null,
-		firstColCheck:true,
-		collided:false,
-		isMoving:false,
-		ballPosX:0,
-		ballPosY:0,
-		Xdirection:0,
-		Ydirection:0,
-		Vectors:[],
-		level:0,
-		player:player,
-		ballSize:0,
-		ballRadius:0,
-		hitCount:0,
-		hitLimit:100,
-		Sounds:{
-			charge:new Audio(Sounds.charge.src),
-			shot:new Audio(Sounds.shot.src)
-		}
-	});
-
-	let newBall = player.Balls[player.Balls.length-1];
+	let newBall = player.Balls[
+		player.Balls.push({
+			ballPosX:0,
+			ballPosY:0,
+			ballRadius:0,
+			ballSize:0,
+			canvas:null,
+			collided:false,
+			firstColCheck:true,
+			hitCount:0,
+			hitLimit:100,
+			isMoving:false,
+			level:0,
+			player:player,
+			render:null,
+			Sounds:{
+				shot:new Audio(Sounds.shot.src)
+			},
+			Vectors:[],
+			Xdirection:0,
+			Ydirection:0
+		})-1
+	];
 
 	newBall.canvas = document.createElement('canvas');
 	newBall.canvas.width = 1;
@@ -1359,11 +1359,15 @@ function CreateShot(player){
 	
 	return newBall;
 }
-function RemoveShot(player, ballNumber){
-	StopLoops(player.Balls[ballNumber].Sounds);
-	player.Balls.splice(ballNumber,1);
+function RemoveShot(ball){
+	let player = ball.player;
+	
+	StopLoops(ball.Sounds);
+	player.Balls.splice(player.Balls.indexOf(ball),1);
 }
-function ChargeShot(change, player, ball){
+function ChargeShot(change, ball){
+	let player = ball.player;
+	
 	if(ball.ballSize===0){
 		player.copyCanvas.height = player.playerHeight;
 		player.copyCanvas.width = player.playerWidth;
@@ -1553,9 +1557,9 @@ function BallBallCollision(ball1,ball2){
 						ball2.hitCount+=1;
 						if(ball2.hitCount>=ball2.hitLimit){
 							if(gameMode===GameMode.adventure)
-								ChargeShot(1, ball2.player, ball2);
+								ChargeShot(1, ball2);
 							else
-								ChargeShot(-1, ball2.player, ball2);
+								ChargeShot(-1, ball2);
 							ball2.hitCount=0;
 						}
 						
@@ -1606,9 +1610,9 @@ function BallPlayerCollision(ball,player){
 							if(player.sizeLevel <= -10){
 								PlaySound(player.Sounds.death);
 								if(player.Balls.length > 0){ //removing unshot ball
-									let latestBall = player.Balls.length-1;
-									if(!player.Balls[latestBall].isMoving)
-										RemoveShot(player,latestBall);
+									let latestBall = player.Balls[player.Balls.length-1];
+									if(!latestBall.isMoving)
+										RemoveShot(latestBall);
 								}
 								if(gameType===GameType.score){
 									//player.score = Math.max(player.score-1,0);
@@ -1919,21 +1923,20 @@ while(deltaTime>=updateInterval){
 					ball = CreateShot(player);
 
 				if(instantCharge){
-					ChargeShot(player.sizeLevel/2, player, ball);
+					ChargeShot(player.sizeLevel/2, ball);
 					ChangeSize(-player.sizeLevel/2, player);
 				} else {
 					player.chargeCount+=player.chargeValue*speedMultiplier; //or *updateInterval?
 					let chargeAmount = Math.floor(Math.min(player.chargeCount/chargeInterval,player.sizeLevel/2));
 					if(chargeAmount>=1){
-						ChargeShot(chargeAmount, player, ball);
+						ChargeShot(chargeAmount, ball);
 						ChangeSize(-chargeAmount, player);
 						player.chargeCount -= chargeAmount*chargeInterval;
 					}
 				}
-				LoopSound(ball.Sounds.charge,player.chargeValue);
-			} else if(ball !== null && !ball.isMoving){
-				LoopSound(ball.Sounds.charge,0);
-			}
+				LoopSound(player.Sounds.charge,player.chargeValue);
+			} else
+				LoopSound(player.Sounds.charge,0);
 			if(ball !== null && !ball.isMoving){
 				//calculating the aiming direction
 				if(!player.aimCentered){
@@ -1955,10 +1958,10 @@ while(deltaTime>=updateInterval){
 					ball.Ydirection=1; //shoots downwards as a failsafe
 				}
 			}
-		} else if(ball !== null){
-			if(ball.ballSize>0 && !ball.isMoving){
-				StopLoop(ball.Sounds.charge);
-				
+		} else if(ball !== null && !ball.isMoving){
+			StopLoop(player.Sounds.charge);
+			
+			if(ball.ballSize>0){
 				CreateColVectors(ball);
 				
 				if(!noKnockback){
@@ -1968,6 +1971,8 @@ while(deltaTime>=updateInterval){
 				}
 				ball.isMoving = true;
 				PlaySound(ball.Sounds.shot);
+			} else {
+				RemoveShot(ball);
 			}
 		}
 		if(!player.onGround){
@@ -2104,7 +2109,7 @@ while(deltaTime>=updateInterval){
 					}
 				}
 				if(ball.Vectors.length===0){ //all vectors collided
-					RemoveShot(player, b);
+					RemoveShot(ball);
 					b--;
 				}
 			}
@@ -4598,7 +4603,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x493",3,scaledHeight-3);
+	guiRender.fillText("Version 0x497",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
