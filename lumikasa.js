@@ -1,5 +1,4 @@
 ﻿'use strict';
-document.addEventListener("DOMContentLoaded", function(event){
 
 //Lumikasa source code (Luokkanen Janne, 2015-2020)
 
@@ -4603,7 +4602,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x497",3,scaledHeight-3);
+	guiRender.fillText("Version 0x498",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
@@ -4656,4 +4655,3 @@ function GameLoop(){ //main loop
 LoadGame();
 ScreenSize();
 GameLoop();
-});
