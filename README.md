@@ -2,7 +2,7 @@ Lumikasa game project
 
 A game where you play as a snowball that shoots snowballs. Game engine developed by me.
 
-You can add stages by dropping image files into the game when stage select window is open
+Stages can be added by dropping image files into the game when stage select window is open
 - Opaque pixels are interpreted as collision data
 - Fully transparent pixels are interpreted as non-collision data
 
