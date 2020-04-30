@@ -406,8 +406,6 @@ let directionInputRepeatInterval = 500; //ms
 //System (+Debug) variables
 let pause = true;
 let gameStarted = false;
-let deltaTime = 0;
-let lastTime = TimeNow();
 let noClear = false;
 let noClip = false;
 let noBounds = false;
@@ -423,8 +421,7 @@ let fixedCamera = false;
 let shotSpeed = 5;
 let winScore = 5;
 let lifeCount = 3;
-let updateInterval = 2;
-let speedMultiplier = 0;
+let levelIndex = 0; //levelIndex AND stageIndex?
 let soundVolume = 0.15;
 let guiScaleOn = true;
 let guiScale = 1;
@@ -435,7 +432,10 @@ let fps = 0;
 let fpsUpdate = TimeNow();
 let fpsAvg = 0;
 let fpsLog = [];
-let levelIndex = 0; //levelIndex AND stageIndex?
+let updateInterval = 2;
+let speedMultiplier = 0;
+let lastTime = TimeNow();
+let steps = 0;
 let frameHold = false;
 let frameStep = false;
 let debugMode = false;
@@ -1867,7 +1867,7 @@ function CheckPlayerInsideTerrain(player,posDiffX,posDiffY){
 	}
 }
 function GameLogic(){
-while(deltaTime>=updateInterval){
+while(steps>=1){
 	for(let p = 0; p < IngamePlayers.length; p++){
 		let player = IngamePlayers[p];
 
@@ -2116,9 +2116,7 @@ while(deltaTime>=updateInterval){
 	}
 	snowRate = SnowRate(0.98,0);
 	
-	deltaTime-=updateInterval;
-	if(deltaTime>1000) //prevent the game from freezing
-		deltaTime=0;
+	steps--;
 }
 	LoopSound(Sounds.snow,snowRate);
 	
@@ -4159,7 +4157,7 @@ function AnimatePosition(currentPos,targetPos,animThreshold=0){
 	let animDistance = targetPos-currentPos;
 	let multipliedAnimForce = animForce*speedMultiplier;
 	let multipliedAnimThreshold = animThreshold*speedMultiplier;
-	while(deltaTime>=updateInterval){
+	while(steps>=1){
 		currentPos+=animDistance*multipliedAnimForce;
 		currentPos+=Math.sign(animDistance)*multipliedAnimThreshold;
 		
@@ -4169,7 +4167,7 @@ function AnimatePosition(currentPos,targetPos,animThreshold=0){
 			break;
 		} else
 			animDistance = newAnimDistance;
-		deltaTime-=updateInterval;
+		steps--;
 	}
 	return currentPos;
 }
@@ -4180,16 +4178,16 @@ function ShowMenu(element){
 		menuAnimating = true;
 	}
 	
-	let startDeltaTime = deltaTime; //for menu secret
-	while(deltaTime>=updateInterval){
+	let startSteps = steps; //for menu secret
+	while(steps>=1){
 		element.xDiff = AnimatePosition(element.xDiff,element.targetXdiff,menuAnimThreshold);
-		if(GUI.logo.secret) deltaTime = startDeltaTime;
+		if(GUI.logo.secret) steps = startSteps;
 		
 		element.yDiff = AnimatePosition(element.yDiff,element.targetYdiff,menuAnimThreshold);
-		if(GUI.logo.secret) deltaTime = startDeltaTime;
+		if(GUI.logo.secret) steps = startSteps;
 		
 		element.width = AnimatePosition(element.width,element.targetWidth,menuAnimThreshold);
-		if(GUI.logo.secret) deltaTime = startDeltaTime;
+		if(GUI.logo.secret) steps = startSteps;
 		
 		element.height = AnimatePosition(element.height,element.targetHeight,menuAnimThreshold);
 		
@@ -4209,16 +4207,16 @@ function HideMenu(element){
 	if(!menuAnimating)
 		menuAnimating = true;
 	
-	let startDeltaTime = deltaTime; //for menu secret
-	while(deltaTime>=updateInterval){
+	let startSteps = steps; //for menu secret
+	while(steps>=1){
 		element.height = AnimatePosition(element.height,element.orgHeight,menuAnimThreshold);
-		if(GUI.logo.secret) deltaTime = startDeltaTime;
+		if(GUI.logo.secret) steps = startSteps;
 		
 		element.width = AnimatePosition(element.width,element.orgWidth,menuAnimThreshold);
-		if(GUI.logo.secret) deltaTime = startDeltaTime;
+		if(GUI.logo.secret) steps = startSteps;
 		
 		element.yDiff = AnimatePosition(element.yDiff,element.orgYdiff,menuAnimThreshold);
-		if(GUI.logo.secret) deltaTime = startDeltaTime;
+		if(GUI.logo.secret) steps = startSteps;
 		
 		element.xDiff = AnimatePosition(element.xDiff,element.orgXdiff,menuAnimThreshold);
 		
@@ -4384,8 +4382,8 @@ function DebugInfo(){
 		fpsLog.push(fps);
 		fpsAvg = fpsLog.reduce((sum, val) => sum + val)/fpsLog.length;
 	}
-	guiRender.fillText("GUIScale: "+guiScale.toFixed(4)+" | "+screenWidth+"x"+screenHeight+" | Frame:"+totalFrameCount+" | Avg:"+fpsAvg.toFixed(2)+" | "+fps,scaledWidth-5,20);
-	guiRender.fillText("[X]guiScale: "+guiScaleOn+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
+	guiRender.fillText(screenWidth+"x"+screenHeight+" | Frame:"+totalFrameCount+" | Steps:"+steps.toFixed(4)+" | Avg:"+fpsAvg.toFixed(2)+" | "+fps,scaledWidth-5,20);
+	guiRender.fillText("[X]guiScale: "+guiScale.toFixed(4)+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
 }
 function LogoDraw(){
 	let mouseIsDrawing = false;
@@ -4602,7 +4600,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x498",3,scaledHeight-3);
+	guiRender.fillText("Version 0x499",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
@@ -4625,7 +4623,7 @@ function GameLoop(){ //main loop
 	
 	let currentTime = TimeNow();
 	if((!frameHold && (currentTime-lastTime>=updateInterval)) || frameStep){ //maximum UpdateRate (1ms)
-		deltaTime = (frameStep) ? updateInterval : currentTime-lastTime;
+		steps = (frameStep) ? 1 : (currentTime-lastTime)/updateInterval + (steps%1);
 		lastTime = currentTime;
 		frameStep = false;
 		
