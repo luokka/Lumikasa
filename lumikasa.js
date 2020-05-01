@@ -4156,7 +4156,8 @@ function AnimateValue(current,target,animThreshold=0,animSteps={steps:steps}){ /
 	let multipliedAnimForce = animForce*speedMultiplier;
 	let multipliedAnimThreshold = animThreshold*speedMultiplier;
 	
-	for(;animSteps.steps >= 1; animSteps.steps--){
+	while(animSteps.steps >= 1){
+		animSteps.steps--;
 		current+=animDistance*multipliedAnimForce;
 		current+=Math.sign(animDistance)*multipliedAnimThreshold;
 		
@@ -4584,7 +4585,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x4A0",3,scaledHeight-3);
+	guiRender.fillText("Version 0x4A1",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
