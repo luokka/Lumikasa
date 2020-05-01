@@ -7,7 +7,7 @@ function TimeNow(){
 	//return performance.now();
 }
 
-let activeMenu = null, activeSubmenu = null;
+let activeMenu = null, activeSubmenu = null, animMenu = null;
 let loadingScreen = true, loadingDone = false, skipAdventure = false;
 let playerConfirm = false, firstJoined = 0;
 
@@ -1867,7 +1867,7 @@ function CheckPlayerInsideTerrain(player,posDiffX,posDiffY){
 	}
 }
 function GameLogic(){
-while(steps>=1){
+for(let step = steps; step >= 1; step--){
 	for(let p = 0; p < IngamePlayers.length; p++){
 		let player = IngamePlayers[p];
 
@@ -2115,8 +2115,6 @@ while(steps>=1){
 		}
 	}
 	snowRate = SnowRate(0.98,0);
-	
-	steps--;
 }
 	LoopSound(Sounds.snow,snowRate);
 	
@@ -3620,7 +3618,7 @@ function Battle(){
 			tempCanvas.height = bgElement.height*guiScale;
 
 			if(!menuAnimating)
-				stageRowStep = AnimatePosition(stageRowStep,stageRow);
+				stageRowStep = AnimateValue(stageRowStep,stageRow);
 			
 			let startIndex = Math.floor(stageRowStep)*stageColumnCount;
 			let endIndex = Math.ceil(stageRowStep)*stageColumnCount+stageColumnCount*stageColumnCount;
@@ -3745,7 +3743,7 @@ function Options(){
 		childElement.yDiff = guiElement.height/2-(childElement.height/2)+((guiElement.height/2-childElement.height/2-guiElement.border)*Players[activePlayer].aimAxisY);
 		
 		if(Players[activePlayer].inputMethod!==-1 && !menuAnimating)
-			deadzoneSliderWidth = AnimatePosition(deadzoneSliderWidth,deadzoneTargetWidth);
+			deadzoneSliderWidth = AnimateValue(deadzoneSliderWidth,deadzoneTargetWidth);
 		
 		for(let i = 0; i < GUI.options.inputfield.length; i++){
 			let guiElement = GUI.options.inputfield[i];
@@ -4150,81 +4148,54 @@ function RenderMenu(element){
 
 	RenderText(element);
 }
-function AnimatePosition(currentPos,targetPos,animThreshold=0){
-	if(currentPos===targetPos)
-		return currentPos;
+function AnimateValue(current,target,animThreshold=0,animSteps={steps:steps}){ //animSteps for multiple chained animations
+	if(current===target)
+		return current;
 	
-	let animDistance = targetPos-currentPos;
+	let animDistance = target-current;
 	let multipliedAnimForce = animForce*speedMultiplier;
 	let multipliedAnimThreshold = animThreshold*speedMultiplier;
-	while(steps>=1){
-		currentPos+=animDistance*multipliedAnimForce;
-		currentPos+=Math.sign(animDistance)*multipliedAnimThreshold;
+	
+	for(;animSteps.steps >= 1; animSteps.steps--){
+		current+=animDistance*multipliedAnimForce;
+		current+=Math.sign(animDistance)*multipliedAnimThreshold;
 		
-		let newAnimDistance = targetPos-currentPos;
+		let newAnimDistance = target-current;
 		if(Math.sign(newAnimDistance)!==Math.sign(animDistance)){ //|| Math.abs(newAnimDistance)<multipliedAnimThreshold ?
-			currentPos=targetPos;
+			current=target;
 			break;
 		} else
 			animDistance = newAnimDistance;
-		steps--;
 	}
-	return currentPos;
+	return current;
 }
-function ShowMenu(element){
-	if(!menuAnimating){
-		element.width = element.orgWidth;
-		element.height = element.orgHeight;
-		menuAnimating = true;
-	}
-	
-	let startSteps = steps; //for menu secret
-	while(steps>=1){
-		element.xDiff = AnimatePosition(element.xDiff,element.targetXdiff,menuAnimThreshold);
-		if(GUI.logo.secret) steps = startSteps;
+function AnimateElement(element,animProperties){
+	let animationDone = true;
+	let animSteps = {steps:steps};
+	for(let ap = 0; ap < animProperties.length; ap++){
+		let prop = animProperties[ap][0];
+		let target = animProperties[ap][1];
 		
-		element.yDiff = AnimatePosition(element.yDiff,element.targetYdiff,menuAnimThreshold);
-		if(GUI.logo.secret) steps = startSteps;
+		element[prop] = AnimateValue(element[prop],element[target],menuAnimThreshold,animSteps);
 		
-		element.width = AnimatePosition(element.width,element.targetWidth,menuAnimThreshold);
-		if(GUI.logo.secret) steps = startSteps;
-		
-		element.height = AnimatePosition(element.height,element.targetHeight,menuAnimThreshold);
-		
-		if(element.xDiff===element.targetXdiff &&
-		element.yDiff===element.targetYdiff &&
-		element.width===element.targetWidth &&
-		element.height===element.targetHeight){
-			menuAnimating=false;
-			break;
+		if(element[prop]!==element[target]){
+			animationDone=false;
+			if(!GUI.logo.secret)
+				break;
 		}
+		if(GUI.logo.secret)
+			animSteps.steps = steps;
 	}
-
-	if(menuAnimating)
-		setTimeout(function(){ShowMenu(element);}, 0);
+	return animationDone;
 }
-function HideMenu(element){
-	if(!menuAnimating)
-		menuAnimating = true;
+function AnimateMenu(){
+	let animProperties = (animMenu.show) ?
+	[["xDiff","targetXdiff"],["yDiff","targetYdiff"],["width","targetWidth"],["height","targetHeight"]] :
+	[["height","orgHeight"],["width","orgWidth"],["yDiff","orgYdiff"],["xDiff","orgXdiff"]];
 	
-	let startSteps = steps; //for menu secret
-	while(steps>=1){
-		element.height = AnimatePosition(element.height,element.orgHeight,menuAnimThreshold);
-		if(GUI.logo.secret) steps = startSteps;
-		
-		element.width = AnimatePosition(element.width,element.orgWidth,menuAnimThreshold);
-		if(GUI.logo.secret) steps = startSteps;
-		
-		element.yDiff = AnimatePosition(element.yDiff,element.orgYdiff,menuAnimThreshold);
-		if(GUI.logo.secret) steps = startSteps;
-		
-		element.xDiff = AnimatePosition(element.xDiff,element.orgXdiff,menuAnimThreshold);
-		
-		if(element.height===element.orgHeight &&
-		element.width===element.orgWidth &&
-		element.yDiff===element.orgYdiff &&
-		element.xDiff===element.orgXdiff){
-			menuAnimating=false;
+	menuAnimating = !AnimateElement(animMenu.menu,animProperties);
+	if(!menuAnimating){
+		if(!animMenu.show){
 			if(activeOption===null){ //submenu active
 				selectedOption = lastOption;
 				activeSubmenu = null;
@@ -4232,12 +4203,23 @@ function HideMenu(element){
 				selectedOption = activeOption;
 			
 			activeOption = null;
-			break;
 		}
+		animMenu = null;
 	}
-
-	if(menuAnimating)
-		setTimeout(function(){HideMenu(element);}, 0);
+}
+function ShowMenu(element){
+	if(!menuAnimating){
+		element.width = element.orgWidth;
+		element.height = element.orgHeight;
+		menuAnimating = true;
+		animMenu = {menu:element,show:true};
+	}
+}
+function HideMenu(element){
+	if(!menuAnimating){
+		menuAnimating = true;
+		animMenu = {menu:element,show:false};
+	}
 }
 function PlayerConfirmWindow(){
 	for(let pl = 1; pl < Players.length; pl++){
@@ -4269,11 +4251,13 @@ function ConfirmPlayers(){
 	if(firstJoined !== 0){
 		playerConfirm = false;
 		selectedOption = (activeSubmenu===GUI.adventure) ? GUI.adventure.button[0] : GUI.battle.dropdown[0];
-		menuAnimating = true;
 
-		let guiElement = (activeSubmenu===GUI.adventure) ? GUI.adventure.title : GUI.battle.title;
-		guiElement.targetHeight = guiElement.orgTargetHeight;
-		ShowMenu(guiElement);
+		let menuElement = (activeSubmenu===GUI.adventure) ? GUI.adventure.title : GUI.battle.title;
+		menuElement.targetHeight = menuElement.orgTargetHeight;
+		
+		menuAnimating = true; //to prevent size initialize in ShowMenu
+		animMenu = {menu:menuElement,show:true}; //to prevent size initialize in ShowMenu
+		AnimateMenu();
 		PlaySound(Sounds.confirm);
 	}
 }
@@ -4569,7 +4553,7 @@ function LoadingScreen(){
 	}
 
 	if(loadingBarProgress < 1)
-		loadingBarProgress = AnimatePosition(loadingBarProgress,loadingBarTarget,0.0001);
+		loadingBarProgress = AnimateValue(loadingBarProgress,loadingBarTarget,0.0001);
 	else if(!loadingDone){
 		if(Levels.length===0){
 			GUI.main.button[0].guiState = GUIstate.Disabled;
@@ -4600,7 +4584,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x499",3,scaledHeight-3);
+	guiRender.fillText("Version 0x4A0",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
@@ -4634,9 +4618,11 @@ function GameLoop(){ //main loop
 		
 		if(loadingScreen)
 			LoadingScreen();
-		else if(activeMenu !== null)
+		else if(activeMenu !== null){
 			activeMenu.run();
-		else if(gameStarted && !pause)
+			if(menuAnimating)
+				AnimateMenu();
+		} else if(gameStarted && !pause)
 			GameLogic();
 		
 		if(debugMode)
