@@ -2980,21 +2980,21 @@ results:{
 playerConfirm:{
 	label:[
 		{data:confirmPlayersText, xDiff:0, yDiff:-130, textWidth:6, textHeight:5},
-		{data:null, xDiff:0, yDiff:-12, pTextAlign:"center", pFontSize:"bold 30", pTextColor:menuTextColor},
+		{data:null, xDiff:0, yDiff:-12, pTextWidth:860, pTextAlign:"center", pFontSize:"bold 30", pTextColor:menuTextColor},
 		{data:null, xDiff:0, yDiff:20, pTextAlign:"center", pFontSize:"bold 20", pTextColor:menuTextColor, pText:"(or doubleclick)"}
 	],
 	background:[
 		{data:Numbers[1],xDiff:-380,yDiff:40,width:160,height:80,textXoffset:63,textYoffset:5,textWidth:6,textHeight:5,textColor:playerTextColor,textFadeColor:playerTextColor,textHighlightColor:optionTextHighlightColor,bgColor:PlayerColors[1].color,bgFadeColor:PlayerColors[1].fadeColor,bgHighlightColor:PlayerColors[1].color,
-			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextXoffset:0,pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[1].bgColor,bgFadeColor:PlayerColors[1].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
+			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[1].bgColor,bgFadeColor:PlayerColors[1].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
 		},
 		{data:Numbers[2],xDiff:-180,yDiff:40,width:160,height:80,textXoffset:70,textYoffset:5,textWidth:6,textHeight:5,textColor:playerTextColor,textFadeColor:playerTextColor,textHighlightColor:optionTextHighlightColor,bgColor:PlayerColors[2].color,bgFadeColor:PlayerColors[2].fadeColor,bgHighlightColor:PlayerColors[2].color,
-			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextXoffset:0,pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[2].bgColor,bgFadeColor:PlayerColors[2].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
+			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[2].bgColor,bgFadeColor:PlayerColors[2].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
 		},
 		{data:Numbers[3],xDiff:20,yDiff:40,width:160,height:80,textXoffset:70,textYoffset:5,textWidth:6,textHeight:5,textColor:playerTextColor,textFadeColor:playerTextColor,textHighlightColor:optionTextHighlightColor,bgColor:PlayerColors[3].color,bgFadeColor:PlayerColors[3].fadeColor,bgHighlightColor:PlayerColors[3].color,
-			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextXoffset:0,pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[3].bgColor,bgFadeColor:PlayerColors[3].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
+			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[3].bgColor,bgFadeColor:PlayerColors[3].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
 		},
 		{data:Numbers[4],xDiff:220,yDiff:40,width:160,height:80,textXoffset:70,textYoffset:5,textWidth:6,textHeight:5,textColor:playerTextColor,textFadeColor:playerTextColor,textHighlightColor:optionTextHighlightColor,bgColor:PlayerColors[4].color,bgFadeColor:PlayerColors[4].fadeColor,bgHighlightColor:PlayerColors[4].color,
-			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextXoffset:0,pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[4].bgColor,bgFadeColor:PlayerColors[4].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
+			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[4].bgColor,bgFadeColor:PlayerColors[4].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
 		}
 	]
 }
@@ -3113,6 +3113,7 @@ function AddDefaultProperties(element, elementType, parent, menu=null){
 	element.orgPfontSize = element.pFontSize;
 	if(!element.hasOwnProperty("pTextXoffset")) element.pTextXoffset = 0;
 	if(!element.hasOwnProperty("pTextYoffset")) element.pTextYoffset = 0;
+	if(!element.hasOwnProperty("pTextWidth")) element.pTextWidth = element.width;
 	if(!element.hasOwnProperty("pTextColor")) element.pTextColor = plainTextColor;
 	if(!element.hasOwnProperty("pText")) element.pText = "";
 }
@@ -3945,10 +3946,10 @@ function RenderPlainText(element){
 	
 	textYpos += element.height;
 	
-	if(element.width===0)
+	if(element.pTextWidth===0)
 		guiRender.fillText(element.pText,textXpos,textYpos);
 	else
-		guiRender.fillText(element.pText,textXpos,textYpos,element.width-Math.abs(element.pTextXoffset*2));
+		guiRender.fillText(element.pText,textXpos,textYpos,element.pTextWidth-Math.abs(element.pTextXoffset*2));
 }
 function RenderText(element){
 	if(element.guiState === GUIstate.Hidden)
@@ -4585,7 +4586,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x4A1",3,scaledHeight-3);
+	guiRender.fillText("Version 0x4A2",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
