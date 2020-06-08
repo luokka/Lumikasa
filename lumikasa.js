@@ -4182,7 +4182,7 @@ function AnimateElement(element,animProperties){
 		
 		if(element[prop]!==element[target]){
 			animationDone=false;
-			if(!GUI.logo.secret)
+			if(!GUI.logo.secret) //animSteps.steps is < 1 so break to avoid unnecessary loop iterations
 				break;
 		}
 		if(GUI.logo.secret)
@@ -4257,9 +4257,9 @@ function ConfirmPlayers(){
 		let menuElement = (activeSubmenu===GUI.adventure) ? GUI.adventure.title : GUI.battle.title;
 		menuElement.targetHeight = menuElement.orgTargetHeight;
 		
-		menuAnimating = true; //to prevent size initialize in ShowMenu
-		animMenu = {menu:menuElement,show:true}; //to prevent size initialize in ShowMenu
-		AnimateMenu();
+		menuAnimating = true;
+		animMenu = {menu:menuElement,show:true};
+		
 		PlaySound(Sounds.confirm);
 	}
 }
@@ -4586,7 +4586,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x4A2",3,scaledHeight-3);
+	guiRender.fillText("Version 0x4A3",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
