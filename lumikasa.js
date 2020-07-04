@@ -476,8 +476,12 @@ let DebugKeys = {
 	Digit9(){wallJump=!wallJump;},
 	Digit0(){infiniteJump=!infiniteJump;},
 	Backquote(){fixedCamera=!fixedCamera;},
-	BracketLeft(){if(shotSpeed>0) shotSpeed--;},
-	BracketRight(){shotSpeed++;}
+	Minus(){if(shotSpeed>0) shotSpeed--;},
+	Equal(){shotSpeed++;},
+	BracketLeft(){aimMargin = Clamp(aimMargin*0.98, 0.0001, 1);},
+	BracketRight(){aimMargin = Clamp(aimMargin*1.02, 0.0001, 1);},
+	Semicolon(){aimArea = Clamp(aimArea*0.98, 1, Infinity);},
+	Quote(){aimArea = Clamp(aimArea*1.02, 1, Infinity);}
 };
 let GameMode = {
 	adventure:0,
@@ -4317,7 +4321,7 @@ function DebugInfo(){
 	guiRender.textAlign="left";
 	
 	if(gameStarted && activeMenu===null){
-		guiRender.fillText("Level: X:"+levelPosX.toFixed(1)+"  Y:"+levelPosY.toFixed(1)+"  Width:"+levelCanvas.width+"  Height:"+levelCanvas.height+"  AreaScale: "+areaScale.toFixed(4)+((fixedCamera) ? "(fixed)" : ""),4,20);
+		guiRender.fillText("Level: X:"+levelPosX.toFixed(1)+"  Y:"+levelPosY.toFixed(1)+"  Width:"+levelCanvas.width+"  Height:"+levelCanvas.height+"  AreaScale: "+areaScale.toFixed(4)+((fixedCamera) ? "(fixed)" : "("+1*aimArea.toFixed(2)+"|"+1*aimMargin.toFixed(4)+")"),4,20);
 		
 		let pCount = 0;
 		for(let p = 1; p < Players.length; p++){
@@ -4586,7 +4590,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x4A3",3,scaledHeight-3);
+	guiRender.fillText("Version 0x4A4",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
