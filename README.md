@@ -10,7 +10,8 @@ Stages can be added by dropping image files into the game when stage select wind
 - Changing collision quality while game is paused leaves old incorrect speed/momentum values in effect temporarily
 - Gamepads might not get reassigned to correct players if identical gamepads are being connected
 - Adventure mode levels can crash the game on lower-end devices (very large level images)
-- Adding a very large image into stage select can crash the game
+- Logo drawing does not work on Firefox-android for some reason?
+- Adding a large image into stage select can crash the game
 - Performance issues on chromium-based browsers
 - Game audio can break randomly?
 - Frame counter inaccurate?
