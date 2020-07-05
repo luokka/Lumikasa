@@ -4104,6 +4104,7 @@ function RenderElements(parentGUI){ //elements are rendered in this order
 					element.item[item].xDiff = element.border;
 					element.item[item].yDiff = yDis;
 					element.item[item].width = element.width-element.border*2;
+					element.item[item].pTextWidth = element.item[item].width;
 					element.item[item].height = itemHeight;
 					element.item[item].pTextAlign = element.pTextAlign;
 					element.item[item].pFontSize = element.pFontSize;
@@ -4590,7 +4591,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x4A4",3,scaledHeight-3);
+	guiRender.fillText("Version 0x4A5",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
