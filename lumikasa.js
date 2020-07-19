@@ -943,15 +943,17 @@ gameCanvas.addEventListener('contextmenu', function(event){
 		event.preventDefault();
 });
 gameCanvas.addEventListener('click', function(event){
-	if(loadingScreen && loadingDone)
-		loadingScreen = false;
+	if(loadingScreen){
+		if(loadingDone)
+			loadingScreen = false;
+		else
+			skipAdventure = true;
+	}
 	gameCanvas.focus();
 });
 gameCanvas.addEventListener('dblclick', function(event){
 	if(playerConfirm)
 		ConfirmPlayers();
-	else if(loadingScreen && !loadingDone)
-		skipAdventure = true;
 	event.preventDefault(); //is this needed?
 });
 window.addEventListener('resize', function(event){
@@ -4591,7 +4593,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x4A5",3,scaledHeight-3);
+	guiRender.fillText("Version 0x4A6",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
@@ -4604,7 +4606,7 @@ function LoadingScreen(){
 		guiRender.fillText("Click to start",scaledWidthHalf,scaledHeightHalf+10);
 	} else if(!skipAdventure){
 		guiRender.textAlign = "center";
-		guiRender.fillText("(Doubleclick to skip Adventure load)",scaledWidthHalf,scaledHeightHalf+50);
+		guiRender.fillText("(Click to skip Adventure load)",scaledWidthHalf,scaledHeightHalf+50);
 	}
 }
 function GameLoop(){ //main loop
