@@ -599,7 +599,7 @@ function DirectionalKey(player, inputType, state, value){
 			}
 		} else if(!loadingScreen && activeMenu!==null){
 			optionSelected = true;
-			PlaySound((selectedOption.cancel) ? Sounds.cancel : Sounds.confirm);
+			PlaySound((selectedOption===cancel || selectedOption.cancel) ? Sounds.cancel : Sounds.confirm); //"selectedOption===cancel" is probably pointless here
 		}
 	}
 	player.confirmKey = state;
@@ -791,7 +791,7 @@ gameCanvas.addEventListener('mousedown', function(event){
 	} else if(!loadingScreen && activeMenu!==null){
 		if(CheckMouse(true)){
 			optionSelected = true;
-			PlaySound((selectedOption.cancel) ? Sounds.cancel : Sounds.confirm);
+			PlaySound((selectedOption===cancel || selectedOption.cancel) ? Sounds.cancel : Sounds.confirm);
 		} else if(activeSubmenu===null)
 			mouseDraw=event.button;
 		else
@@ -4593,7 +4593,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x4A6",3,scaledHeight-3);
+	guiRender.fillText("Version 0x4A7",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
