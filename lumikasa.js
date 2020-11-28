@@ -32,7 +32,7 @@ let positionCorrection = 0.05;
 let jumpForce = -0.625;
 let maxDropSpeed = 1.25;
 let ballSpeed = 2.5;
-let knockBackForce = 0.0125;
+let knockBackForce = 0.02;
 let momentumThreshold = 0.005;
 
 let momentumChange = 0.00025;
@@ -426,12 +426,43 @@ let soundVolume = 0.15;
 let guiScaleOn = true;
 let guiScale = 1;
 let vsync = true;
-let frameCount = 0;
-let totalFrameCount = 0;
-let fps = 0;
-let fpsUpdate = TimeNow();
-let fpsAvg = 0;
-let fpsLog = [];
+let PerfInfo = {
+	Reset(){
+		this.frameCount=0;
+		this.totalFrameCount=0;
+		this.fps=0;
+		this.fpsLog=[];
+		this.frameTime=0;
+		this.frameTimeMax=0;
+		//this.frameTimeLog=[];
+		this.frameInfo="";
+		this.fpsInfo="";
+		this.frameUpdate=TimeNow();
+		this.fpsUpdate=TimeNow();
+	},
+	LogFrame(currentTime){
+		this.frameCount++;
+		this.totalFrameCount++;
+		this.frameTime = currentTime-this.frameUpdate;
+		this.frameTimeMax = Math.max(this.frameTime,this.frameTimeMax);
+		//this.frameTimeLog.push(this.frameTime);
+		this.frameInfo = "Frame:"+this.totalFrameCount+" | "+this.frameTime+"ms (max:"+this.frameTimeMax+") | Steps:"+steps.toFixed(4);
+		this.frameUpdate = currentTime;
+	},
+	LogFps(currentTime){
+		this.fps = this.frameCount * 1000/(currentTime-this.fpsUpdate);
+		this.frameCount = 0;
+		this.fpsLog.push(this.fps);
+		let fpsAvg = this.fpsLog.reduce((sum, val) => sum + val)/this.fpsLog.length;
+		this.fpsInfo = "Avg:"+fpsAvg.toFixed(2)+" | "+this.fps.toFixed(2);
+		this.fpsUpdate = currentTime;
+	},
+	Update(currentTime){
+		this.LogFrame(currentTime);
+		if((currentTime-this.fpsUpdate)>=500)
+			this.LogFps(currentTime);
+	}
+};
 let updateInterval = 2;
 let speedMultiplier = 0;
 let lastTime = TimeNow();
@@ -442,7 +473,7 @@ let debugMode = false;
 let DebugKeys = {
 	ScrollLock(){
 		debugMode=!debugMode;
-		frameCount=null;
+		PerfInfo.Reset();
 	},
 	Comma(){
 		frameHold=!frameHold;
@@ -4307,16 +4338,6 @@ function Clamp(value,min,max){
 	return Math.min(Math.max(value, min), max);
 }
 function DebugInfo(){
-	if(frameCount===null){
-		frameCount=0;
-		totalFrameCount=0;
-		fps=0;
-		fpsAvg=0;
-		fpsLog=[];
-		fpsUpdate=TimeNow();
-		return;
-	}
-	
 	guiRender.fillStyle="#00FF00";
 	guiRender.font="15px Arial";
 	
@@ -4364,19 +4385,10 @@ function DebugInfo(){
 	guiRender.fillText("[9]wallJump: "+wallJump,xPos,scaledHeight-50);
 	guiRender.fillText("[0]infiniteJump: "+infiniteJump,xPos,scaledHeight-30);
 	guiRender.fillText("[N/M]stage-/+  [,]frameHold  [.]frameStep",xPos,scaledHeight-10);
-	
-	frameCount++;
-	totalFrameCount++;
-	if((TimeNow()-fpsUpdate)>=1000){
-		fpsUpdate = TimeNow();
-		//fpsUpdate += 1000;
-		fps = frameCount;
-		frameCount = 0;
-		fpsLog.push(fps);
-		fpsAvg = fpsLog.reduce((sum, val) => sum + val)/fpsLog.length;
-	}
-	guiRender.fillText(screenWidth+"x"+screenHeight+" | Frame:"+totalFrameCount+" | Steps:"+steps.toFixed(4)+" | Avg:"+fpsAvg.toFixed(2)+" | "+fps,scaledWidth-5,20);
 	guiRender.fillText("[X]guiScale: "+guiScale.toFixed(4)+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
+	
+	PerfInfo.Update(TimeNow());
+	guiRender.fillText(screenWidth+"x"+screenHeight+" | "+PerfInfo.frameInfo+" | "+PerfInfo.fpsInfo,scaledWidth-5,20);
 }
 function LogoDraw(){
 	let mouseIsDrawing = false;
@@ -4593,7 +4605,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x4A7",3,scaledHeight-3);
+	guiRender.fillText("Version 0x4AB",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
