@@ -1,6 +1,6 @@
 ﻿'use strict';
 
-//Lumikasa source code (Luokkanen Janne, 2015-2020)
+//Lumikasa source code (Luokkanen Janne, 2015-2021)
 
 function TimeNow(){
 	return Date.now();
@@ -2284,7 +2284,7 @@ for(let step = steps; step >= 1; step--){
 	}
 	
 	if(IngamePlayers.length>1){
-		gameRender.lineWidth = 3;
+		gameRender.lineWidth = 3*guiScale;
 		gameRender.setLineDash([]);
 	}
 	for(let p = 0; p < IngamePlayers.length; p++){
@@ -2309,8 +2309,8 @@ for(let step = steps; step >= 1; step--){
 		for(let b = 0; b < player.Balls.length; b++)
 			gameRender.drawImage(player.Balls[b].canvas,0,0,player.Balls[b].canvas.width,player.Balls[b].canvas.height,player.Balls[b].ballPosX*areaScale,player.Balls[b].ballPosY*areaScale,player.Balls[b].canvas.width*areaScale,player.Balls[b].canvas.height*areaScale);
 	}
-	gameRender.lineWidth = 3;
-	gameRender.setLineDash([5,10]);
+	gameRender.lineWidth = 3*guiScale;
+	gameRender.setLineDash([5*guiScale,10*guiScale]);
 	for(let p = 0; p < IngamePlayers.length; p++){
 		let player = IngamePlayers[p];
 
@@ -4605,7 +4605,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x4AB",3,scaledHeight-3);
+	guiRender.fillText("Version 0x4AC",3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
