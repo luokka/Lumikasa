@@ -1,6 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
+const version = "0x4AD";
 
 function TimeNow(){
 	return Date.now();
@@ -934,36 +935,31 @@ gameCanvas.addEventListener('wheel', function(event){
 });
 gameCanvas.addEventListener('drop', function(event){
 	event.preventDefault();
-	if(event.dataTransfer.items){
-		for(let i = 0; i < event.dataTransfer.items.length; i++){ //mozilla's example code
-			if(event.dataTransfer.items[i].kind === 'file'){
-				let file = event.dataTransfer.items[i].getAsFile();
+	for(let i = 0; i < event.dataTransfer.files.length; i++){
+		if(activeSubmenu===GUI.battle && !playerConfirm && !menuAnimating){
+			let customStageImage = new Image();
+			customStageImage.src = URL.createObjectURL(event.dataTransfer.files[i]);
+			
+			loadStageCount++;
+			
+			customStageImage.onerror = function(){
+				//alert("Could not load image.");
+				loadStageCount--;
+			};
+			customStageImage.onload = function(){
+				Stages.push(this);
+				
+				AddStageButton(Stages.length-1,this.naturalWidth,this.naturalHeight);
+				
 				if(activeSubmenu===GUI.battle && !playerConfirm && !menuAnimating){
-					let customStageImage = new Image();
-					customStageImage.src = URL.createObjectURL(file);
-					
-					loadStageCount++;
-					
-					customStageImage.onerror = function(){
-						//alert("Could not load image.");
-						loadStageCount--;
-					};
-					customStageImage.onload = function(){
-						Stages.push(this);
-						
-						AddStageButton(Stages.length-1,this.naturalWidth,this.naturalHeight);
-						
-						if(activeSubmenu===GUI.battle && !playerConfirm && !menuAnimating){
-							stageRow = GetLastStageRow();
-							selectedOption = GUI.battle.stagebutton[Stages.length-1];
-						}
-						
-						loadStageCount--;
-					};
-				} else
-					gameCanvas.style.backgroundImage = "url('"+URL.createObjectURL(file)+"')";
-			}
-		}
+					stageRow = GetLastStageRow();
+					selectedOption = GUI.battle.stagebutton[Stages.length-1];
+				}
+				
+				loadStageCount--;
+			};
+		} else
+			gameCanvas.style.backgroundImage = "url('"+URL.createObjectURL(event.dataTransfer.files[i])+"')";
 	}
 });
 gameCanvas.addEventListener('dragover', function(event){
@@ -4605,7 +4601,7 @@ function LoadingScreen(){
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version 0x4AC",3,scaledHeight-3);
+	guiRender.fillText("Version "+version,3,scaledHeight-3);
 	
 	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
 	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
