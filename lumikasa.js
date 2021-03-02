@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4AD";
+const version = "0x4AE";
 
 function TimeNow(){
 	return Date.now();
@@ -3169,9 +3169,8 @@ function UpdateInputMethodMenu(){
 		
 		if(InputMethods[method].player>0)
 			inputDropdown.item[method].borderColor = PlayerColors[InputMethods[method].player].color;
-			
-		if(Math.floor(InputMethods[method].id.length*11)>inputDropdown.targetWidth)
-			inputDropdown.targetWidth = Math.floor(InputMethods[method].id.length*11);
+		
+		inputDropdown.targetWidth = Math.max(inputDropdown.targetWidth, Math.floor(guiRender.measureText(InputMethods[method].id).width));
 	}
 	if(Players[activePlayer].inputMethod===-1){ //activePlayer has no inputMethod
 		inputDropdown.item.push({data:null,pText:""});
