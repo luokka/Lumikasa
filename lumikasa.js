@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4AE";
+const version = "0x4B0";
 
 function TimeNow(){
 	return Date.now();
@@ -843,15 +843,17 @@ gameCanvas.addEventListener('mousemove', function(event){
 	if(keyBinding){
 		if(Players[activePlayer].inputMethod===0){
 			if((mouseX-oldMouseX < -50 && mouseX < scaledWidth*0.1) || (mouseX-oldMouseX > 50 && mouseX > scaledWidth*0.9)){
-				let axisName = Math.sign(mouseX-oldMouseX)===1 ? "+MouseX" : "-MouseX";
-				let axisCode = Math.sign(mouseX-oldMouseX)===1 ? "+mX" : "-mX";
+				let axisSign = Math.sign(mouseX-oldMouseX)===1 ? "+" : "-";
+				let axisName = axisSign + "MouseX";
+				let axisCode = axisSign + "mX";
 				
 				SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
 				
 				StopKeyBinding();
 			} else if((mouseY-oldMouseY < -50 && mouseY < scaledHeight*0.1) || (mouseY-oldMouseY > 50 && mouseY > scaledHeight*0.9)){
-				let axisName = Math.sign(mouseY-oldMouseY)===1 ? "+MouseY" : "-MouseY";
-				let axisCode = Math.sign(mouseY-oldMouseY)===1 ? "+mY" : "-mY";
+				let axisSign = Math.sign(mouseY-oldMouseY)===1 ? "+" : "-";
+				let axisName = axisSign + "MouseY";
+				let axisCode = axisSign + "mY";
 				
 				SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
 				
@@ -864,27 +866,29 @@ gameCanvas.addEventListener('mousemove', function(event){
 		//if(previousOption !== selectedOption)
 			//PlaySound(Sounds.select);
 	}
-	InputUpdate("-mX",InputMethods[0].player,Math.sign(mouseAxisX)===1 ? 0 : mouseAxisX);
-	InputUpdate("+mX",InputMethods[0].player,Math.sign(mouseAxisX)===1 ? mouseAxisX : 0);
+	InputUpdate("-mX",InputMethods[0].player,Math.min(mouseAxisX,0));
+	InputUpdate("+mX",InputMethods[0].player,Math.max(mouseAxisX,0));
 
-	InputUpdate("-mY",InputMethods[0].player,Math.sign(mouseAxisY)===1 ? 0 : mouseAxisY);
-	InputUpdate("+mY",InputMethods[0].player,Math.sign(mouseAxisY)===1 ? mouseAxisY : 0);
+	InputUpdate("-mY",InputMethods[0].player,Math.min(mouseAxisY,0));
+	InputUpdate("+mY",InputMethods[0].player,Math.max(mouseAxisY,0));
 });
 let scrollBuffer = 0;
 gameCanvas.addEventListener('wheel', function(event){
 	if(keyBinding){
 		if(Players[activePlayer].inputMethod===0){
 			if(Math.abs(event.deltaX) > 1){
-				let axisName = Math.sign(event.deltaX)===1 ? "+ScrollX" : "-ScrollX";
-				let axisCode = Math.sign(event.deltaX)===1 ? "+sX" : "-sX";
+				let axisSign = Math.sign(event.deltaX)===1 ? "+" : "-";
+				let axisName = axisSign + "ScrollX";
+				let axisCode = axisSign + "sX";
 				
 				SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
 				
 				StopKeyBinding();
 				scrollAxisX=0;
 			} else if(Math.abs(event.deltaY) > 1){
-				let axisName = Math.sign(event.deltaY)===1 ? "+ScrollY" : "-ScrollY";
-				let axisCode = Math.sign(event.deltaY)===1 ? "+sY" : "-sY";
+				let axisSign = Math.sign(event.deltaY)===1 ? "+" : "-";
+				let axisName = axisSign + "ScrollY";
+				let axisCode = axisSign + "sY";
 				
 				SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
 				
@@ -922,14 +926,14 @@ gameCanvas.addEventListener('wheel', function(event){
 		scrollAxisX = Clamp(scrollAxisX+event.deltaX/100, -1, 1);
 		scrollAxisY = Clamp(scrollAxisY+event.deltaY/100, -1, 1);
 		
-		if(InputUpdate("-sX",InputMethods[0].player,Math.sign(scrollAxisX)===1 ? 0 : scrollAxisX))
+		if(InputUpdate("-sX",InputMethods[0].player,Math.min(scrollAxisX,0)))
 			event.preventDefault();
-		if(InputUpdate("+sX",InputMethods[0].player,Math.sign(scrollAxisX)===1 ? scrollAxisX : 0))
+		if(InputUpdate("+sX",InputMethods[0].player,Math.max(scrollAxisX,0)))
 			event.preventDefault();
 
-		if(InputUpdate("-sY",InputMethods[0].player,Math.sign(scrollAxisY)===1 ? 0 : scrollAxisY))
+		if(InputUpdate("-sY",InputMethods[0].player,Math.min(scrollAxisY,0)))
 			event.preventDefault();
-		if(InputUpdate("+sY",InputMethods[0].player,Math.sign(scrollAxisY)===1 ? scrollAxisY : 0))
+		if(InputUpdate("+sY",InputMethods[0].player,Math.max(scrollAxisY,0)))
 			event.preventDefault();
 	}
 });
@@ -1079,8 +1083,9 @@ function CheckGamepads(){
 			else {
 				gamepadTemp.axisValues[a] = 0; //disables the first if statement
 				if(Math.abs(gamepads[gp].axes[a]) > 0.9){
-					let axisName = Math.sign(gamepads[gp].axes[a])===1 ? "+Axis("+a+")" : "-Axis("+a+")";
-					let axisCode = Math.sign(gamepads[gp].axes[a])===1 ? "+a"+a : "-a"+a;
+					let axisSign = Math.sign(gamepads[gp].axes[a])===1 ? "+" : "-";
+					let axisName = axisSign + "Axis("+a+")";
+					let axisCode = axisSign + "a"+a;
 					
 					SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
 					StopKeyBinding();
@@ -3056,7 +3061,7 @@ function CheckElementProperties(element,elementType,parent,menu){
 		}
 	}
 }
-function AddDefaultProperties(element, elementType, parent, menu=null){
+function AddDefaultProperties(element, elementType, parent, menu=null){ //element.property ??= default
 	element.parent = parent;
 	element.type = elementType;
 	
@@ -3188,7 +3193,7 @@ function CloseAllMenus(){
 	activeSubmenu = null;
 }
 function CurrentMenu(){
-	return (activeSubmenu!==null) ? activeSubmenu : activeMenu;
+	return (activeSubmenu!==null) ? activeSubmenu : activeMenu; //return activeSubmenu ?? activeMenu;
 }
 function GetClosestOption(direction,option){
 	let menuGUI = CurrentMenu();
@@ -3200,10 +3205,10 @@ function GetClosestOption(direction,option){
 	let maxOverlap = 0; //decreasing this initial value makes menu navigation less strict
 	let overlapThreshold = 0.5; //percentage of length overlap required if a closer gui-element is found
 
-	let guiTop = guiElement.yDiff+(guiParent.yDiff || 0);
+	let guiTop = guiElement.yDiff+(guiParent.yDiff || 0); //?? 0
 	let guiHeight = (guiElement.type==="title") ? guiElement.orgHeight : guiElement.height;
 	let guiBottom = guiTop+guiHeight;
-	let guiLeft = guiElement.xDiff+(guiParent.xDiff || 0);
+	let guiLeft = guiElement.xDiff+(guiParent.xDiff || 0); //?? 0
 	let guiWidth = (guiElement.type==="title") ? guiElement.orgWidth : guiElement.width;
 	let guiRight = guiLeft+guiWidth;
 	
@@ -3215,10 +3220,10 @@ function GetClosestOption(direction,option){
 
 		let newParent = newElement.parent;
 
-		let newTop = newElement.yDiff+(newParent.yDiff || 0);
+		let newTop = newElement.yDiff+(newParent.yDiff || 0); //?? 0
 		let newHeight = (newElement.type==="title") ? newElement.orgHeight : newElement.height;
 		let newBottom = newTop+newHeight;
-		let newLeft = newElement.xDiff+(newParent.xDiff || 0);
+		let newLeft = newElement.xDiff+(newParent.xDiff || 0); //?? 0
 		let newWidth = (newElement.type==="title") ? newElement.orgWidth : newElement.width;
 		let newRight = newLeft+newWidth;
 
@@ -3319,7 +3324,7 @@ function NavigateGUI(direction){
 			if(prevSelectedItem!==activeOption.selectedItem)
 				optionChanged = true;
 		} else if(direction===Input.left || direction===Input.right)
-			SetAdjustBox(CurrentMenu(),activeOption,(direction===Input.left) ? false : true);
+			SetAdjustBox(CurrentMenu(),activeOption,(direction===Input.left) ? -1 : 1);
 	}
 	
 	if(optionChanged)
@@ -3330,8 +3335,8 @@ function MouseOver(element){
 	if(element.guiState !== GUIstate.Enabled)
 		return false;
 	
-	guiY = scaledHeightHalf+element.yDiff+(element.parent.yDiff || 0);
-	guiX = scaledWidthHalf+element.xDiff+(element.parent.xDiff || 0);
+	guiY = scaledHeightHalf+element.yDiff+(element.parent.yDiff || 0); //?? 0
+	guiX = scaledWidthHalf+element.xDiff+(element.parent.xDiff || 0); //?? 0
 	if(mouseY>=guiY && mouseY<guiY+element.height && mouseX>=guiX && mouseX<guiX+element.width)
 		return true;
 	else
@@ -3382,10 +3387,10 @@ function CheckMouse(clicked){
 			if(clicked){
 				if(MouseOver(guiElement)){
 					if(mouseX>guiX && mouseX<guiX+guiElement.width*0.25){
-						SetAdjustBox(CurrentMenu(),guiElement,false);
+						SetAdjustBox(CurrentMenu(),guiElement,-1);
 						return false;
 					} else if(mouseX>guiX+guiElement.width*0.75 && mouseX<guiX+guiElement.width){
-						SetAdjustBox(CurrentMenu(),guiElement,true);
+						SetAdjustBox(CurrentMenu(),guiElement,1);
 						return false;
 					}
 				} else if(activeOption===guiElement){
@@ -3452,36 +3457,31 @@ function CheckMouse(clicked){
 
 	return false;
 }
-function SetAdjustBox(menu,option,positiveAdjust){
+function SetAdjustBox(menu,option,change){
 	let oldAdjust = 0, newAdjust = 0;
 	if(menu===GUI.battle){
 		if(option===GUI.battle.adjustbox[0]){
 			oldAdjust = winScore;
-			winScore += (positiveAdjust) ? 1 : -1;
-			winScore = Clamp(winScore, 1, 100);
+			winScore = Clamp(winScore+change, 1, 100);
 			newAdjust = winScore;
 		} else if(option===GUI.battle.adjustbox[1]){
 			oldAdjust = lifeCount;
-			lifeCount += (positiveAdjust) ? 1 : -1;
-			lifeCount = Clamp(lifeCount, 1, 100);
+			lifeCount = Clamp(lifeCount+change, 1, 100);
 			newAdjust = lifeCount;
 		} else if(option===GUI.battle.adjustbox[2]){
 			oldAdjust = shotSpeed;
-			shotSpeed += (positiveAdjust) ? 1 : -1;
-			shotSpeed = Clamp(shotSpeed, 1, 5);
+			shotSpeed = Clamp(shotSpeed+change, 1, 5);
 			newAdjust = shotSpeed;
 		}
 	} else if(menu===GUI.options){
 		if(option===GUI.options.adjustbox[0]){
 			oldAdjust = updateInterval;
-			updateInterval += (positiveAdjust) ? -1 : 1;
-			updateInterval = Clamp(updateInterval, 1, 5);
+			updateInterval = Clamp(updateInterval-change, 1, 5);
 			UpdateMultiplier(updateInterval);
 			newAdjust = updateInterval;
 		} else if(option===GUI.options.adjustbox[1]){
 			oldAdjust = soundVolume;
-			soundVolume += (positiveAdjust) ? 0.01 : -0.01;
-			soundVolume = Clamp(soundVolume, 0, 1);
+			soundVolume = Clamp(soundVolume+change*0.01, 0, 1);
 			newAdjust = soundVolume;
 		}
 	}
@@ -3968,8 +3968,8 @@ function RenderPlainText(element){
 	guiRender.font=element.pFontSize+"px Arial";
 	guiRender.textAlign=element.pTextAlign;
 	
-	let textXpos = scaledWidthHalf+element.xDiff+element.pTextXoffset+(element.parent.xDiff || 0);
-	let textYpos = scaledHeightHalf+element.yDiff+element.pTextYoffset+(element.parent.yDiff || 0);
+	let textXpos = scaledWidthHalf+element.xDiff+element.pTextXoffset+(element.parent.xDiff || 0); //?? 0
+	let textYpos = scaledHeightHalf+element.yDiff+element.pTextYoffset+(element.parent.yDiff || 0); //?? 0
 	
 	if(guiRender.textAlign === "right" || guiRender.textAlign === "end")
 		textXpos += element.width;
@@ -4004,8 +4004,8 @@ function RenderText(element){
 			for(let px = 0; px < element.data[py].length; px++){
 				if(element.data[py][px] === 1){
 					guiRender.rect(
-						scaledWidthHalf+element.xDiff+element.textXoffset+px*(element.textWidth+element.textXgap)+(element.parent.xDiff || 0),
-						scaledHeightHalf+element.yDiff+element.textYoffset+py*(element.textHeight+element.textYgap)+(element.parent.yDiff || 0),
+						scaledWidthHalf+element.xDiff+element.textXoffset+px*(element.textWidth+element.textXgap)+(element.parent.xDiff || 0), //?? 0
+						scaledHeightHalf+element.yDiff+element.textYoffset+py*(element.textHeight+element.textYgap)+(element.parent.yDiff || 0), //?? 0
 						element.textWidth,
 						element.textHeight
 					);
@@ -4035,8 +4035,8 @@ function RenderOption(element){
 		guiRender.fillStyle = element.bgFadeColor;
 	}
 	
-	let rectX = scaledWidthHalf+element.xDiff+element.border/2-element.padding+(element.parent.xDiff || 0);
-	let rectY = scaledHeightHalf+element.yDiff+element.border/2-element.padding+(element.parent.yDiff || 0);
+	let rectX = scaledWidthHalf+element.xDiff+element.border/2-element.padding+(element.parent.xDiff || 0); //?? 0
+	let rectY = scaledHeightHalf+element.yDiff+element.border/2-element.padding+(element.parent.yDiff || 0); //?? 0
 	let rectW = element.width-element.border+element.padding*2;
 	let rectH = element.height-element.border+element.padding*2;
 	
