@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4B3";
+const version = "0x4B4";
 
 function TimeNow(){
 	return Date.now();
@@ -285,7 +285,7 @@ let guiRender = guiCanvas.getContext('2d');
 let tempCanvas = document.createElement('canvas');
 let tempRender = tempCanvas.getContext('2d');
 
-let screenWidth = 0, screenHeight = 0, pixelRatio = 0, pixelScaler = 100;
+let screenWidth = 0, screenHeight = 0, pixelRatio = 0, pixelScale = 100;
 let scaledWidth = 0, scaledHeight = 0;
 let scaledWidthHalf = 0, scaledHeightHalf = 0;
 
@@ -490,11 +490,11 @@ let DebugKeys = {
 		ScreenSize();
 	},
 	KeyZ(){
-		if(pixelScaler>1)pixelScaler--;
+		if(pixelScale>1)pixelScale--;
 		ScreenSize();
 	},
 	KeyB(){
-		pixelScaler++;
+		pixelScale++;
 		ScreenSize();
 	},
 	KeyC(){noClear=!noClear;},
@@ -537,7 +537,7 @@ let gameType = GameType.score;
 UpdateMultiplier(updateInterval);
 
 function ScreenSize(){ //Initialize game screen and update middlePoint (if screensize changes...)
-	pixelRatio = window.devicePixelRatio*(pixelScaler/100);
+	pixelRatio = Math.max(window.devicePixelRatio*(pixelScale/100),1/gameCanvas.offsetWidth,1/gameCanvas.offsetHeight);
 	screenWidth = gameCanvas.offsetWidth*pixelRatio;
 	screenHeight = gameCanvas.offsetHeight*pixelRatio;
 	
@@ -4390,7 +4390,7 @@ function DebugInfo(){
 	guiRender.fillText("[9]wallJump: "+wallJump,xPos,scaledHeight-50);
 	guiRender.fillText("[0]infiniteJump: "+infiniteJump,xPos,scaledHeight-30);
 	guiRender.fillText("[N/M]stage-/+  [,]frameHold  [.]frameStep",xPos,scaledHeight-10);
-	guiRender.fillText("[Z/B]pixelScaler: "+pixelScaler+"%("+pixelRatio+") [X]guiScale: "+guiScale.toFixed(4)+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
+	guiRender.fillText("[Z/B]pixelScale: "+pixelScale+"%("+pixelRatio+") [X]guiScale: "+guiScale.toFixed(4)+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
 	
 	PerfInfo.Update(TimeNow());
 	guiRender.fillText(screenWidth+"x"+screenHeight+" | "+PerfInfo.frameInfo+" | "+PerfInfo.fpsInfo,scaledWidth-5,20);
