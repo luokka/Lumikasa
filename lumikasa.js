@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4B1";
+const version = "0x4B3";
 
 function TimeNow(){
 	return Date.now();
@@ -285,7 +285,7 @@ let guiRender = guiCanvas.getContext('2d');
 let tempCanvas = document.createElement('canvas');
 let tempRender = tempCanvas.getContext('2d');
 
-let screenWidth = 0, screenHeight = 0;
+let screenWidth = 0, screenHeight = 0, pixelRatio = 0, pixelScaler = 100;
 let scaledWidth = 0, scaledHeight = 0;
 let scaledWidthHalf = 0, scaledHeightHalf = 0;
 
@@ -489,6 +489,14 @@ let DebugKeys = {
 		guiScaleOn=!guiScaleOn;
 		ScreenSize();
 	},
+	KeyZ(){
+		if(pixelScaler>1)pixelScaler--;
+		ScreenSize();
+	},
+	KeyB(){
+		pixelScaler++;
+		ScreenSize();
+	},
 	KeyC(){noClear=!noClear;},
 	KeyV(){vsync=!vsync;},
 	KeyN(){LoadLevel(--levelIndex);},
@@ -529,8 +537,9 @@ let gameType = GameType.score;
 UpdateMultiplier(updateInterval);
 
 function ScreenSize(){ //Initialize game screen and update middlePoint (if screensize changes...)
-	screenWidth = window.innerWidth;
-	screenHeight = window.innerHeight;
+	pixelRatio = window.devicePixelRatio*(pixelScaler/100);
+	screenWidth = gameCanvas.offsetWidth*pixelRatio;
+	screenHeight = gameCanvas.offsetHeight*pixelRatio;
 	
 	gameCanvas.width = guiCanvas.width = screenWidth;
 	gameCanvas.height = guiCanvas.height = screenHeight;
@@ -768,8 +777,8 @@ function InputUpdate(input,playerNum,value){
 	return validInput;
 }
 function UpdateMousePos(x,y){
-	mouseX = x/guiScale;
-	mouseY = y/guiScale;
+	mouseX = x/guiScale*pixelRatio;
+	mouseY = y/guiScale*pixelRatio;
 	mouseAxisX = mouseX/(scaledWidthHalf)-1;
 	mouseAxisY = mouseY/(scaledHeightHalf)-1;
 }
@@ -4381,7 +4390,7 @@ function DebugInfo(){
 	guiRender.fillText("[9]wallJump: "+wallJump,xPos,scaledHeight-50);
 	guiRender.fillText("[0]infiniteJump: "+infiniteJump,xPos,scaledHeight-30);
 	guiRender.fillText("[N/M]stage-/+  [,]frameHold  [.]frameStep",xPos,scaledHeight-10);
-	guiRender.fillText("[X]guiScale: "+guiScale.toFixed(4)+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
+	guiRender.fillText("[Z/B]pixelScaler: "+pixelScaler+"%("+pixelRatio+") [X]guiScale: "+guiScale.toFixed(4)+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
 	
 	PerfInfo.Update(TimeNow());
 	guiRender.fillText(screenWidth+"x"+screenHeight+" | "+PerfInfo.frameInfo+" | "+PerfInfo.fpsInfo,scaledWidth-5,20);
