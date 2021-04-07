@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4B5";
+const version = "0x4B6";
 
 function TimeNow(){
 	//return Date.now();
@@ -447,7 +447,7 @@ let PerfInfo = {
 		this.frameTime = currentTime-this.frameUpdate;
 		this.frameTimeMax = Math.max(this.frameTime,this.frameTimeMax);
 		//this.frameTimeLog.push(this.frameTime);
-		this.frameInfo = "Frame:"+this.totalFrameCount+" | "+this.frameTime+"ms (max:"+this.frameTimeMax+") | Steps:"+steps.toFixed(4);
+		this.frameInfo = "Frame:"+this.totalFrameCount+" | "+this.frameTime.toFixed(3)+"ms (max:"+this.frameTimeMax.toFixed(3)+") | Steps:"+steps.toFixed(3);
 		this.frameUpdate = currentTime;
 	},
 	LogFps(currentTime){
