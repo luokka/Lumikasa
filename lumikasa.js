@@ -1,11 +1,11 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4B4";
+const version = "0x4B5";
 
 function TimeNow(){
-	return Date.now();
-	//return performance.now();
+	//return Date.now();
+	return performance.now();
 }
 
 let activeMenu = null, activeSubmenu = null, animMenu = null;
@@ -812,8 +812,8 @@ document.addEventListener('keydown', function(event){
 					if(event.code === DebugKeys[keys[dk]].name){
 						DebugKeys[keys[dk]]();
 						break;
-					} else if(!debugMode)
-						break; //other DebugKeys are checked only in debugMode
+					}
+					if(!debugMode) break; //other DebugKeys (dk > 0) are checked only in debugMode
 				}
 			}
 		}
@@ -1077,29 +1077,27 @@ function CheckGamepads(){
 		for(let b = 0; b < gamepads[gp].buttons.length; b++){
 			if(gamepads[gp].buttons[b].value>=gamepadTemp.buttonValues[b] && gamepadTemp.buttonValues[b]>currentDeadzone) //prevents immediate keybind
 				continue;
-			else {
-				gamepadTemp.buttonValues[b] = 0; //disables the first if statement
-				if(gamepads[gp].buttons[b].value > 0.9){
-					SetKeyBinding(activePlayer, activeBinding, "Joy("+b+")", b);
-					StopKeyBinding();
-					return;
-				}
+			
+			gamepadTemp.buttonValues[b] = 0; //disables the first if statement
+			if(gamepads[gp].buttons[b].value > 0.9){
+				SetKeyBinding(activePlayer, activeBinding, "Joy("+b+")", b);
+				StopKeyBinding();
+				return;
 			}
 		}
 		for(let a = 0; a < gamepads[gp].axes.length; a++){
 			if(Math.abs(gamepads[gp].axes[a])>=gamepadTemp.axisValues[a] && gamepadTemp.axisValues[a]>currentDeadzone) //prevents immediate keybind
 				continue;
-			else {
-				gamepadTemp.axisValues[a] = 0; //disables the first if statement
-				if(Math.abs(gamepads[gp].axes[a]) > 0.9){
-					let axisSign = Math.sign(gamepads[gp].axes[a])===1 ? "+" : "-";
-					let axisName = axisSign + "Axis("+a+")";
-					let axisCode = axisSign + "a"+a;
-					
-					SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
-					StopKeyBinding();
-					return;
-				}
+			
+			gamepadTemp.axisValues[a] = 0; //disables the first if statement
+			if(Math.abs(gamepads[gp].axes[a]) > 0.9){
+				let axisSign = Math.sign(gamepads[gp].axes[a])===1 ? "+" : "-";
+				let axisName = axisSign + "Axis("+a+")";
+				let axisCode = axisSign + "a"+a;
+				
+				SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
+				StopKeyBinding();
+				return;
 			}
 		}
 	}
@@ -1142,7 +1140,6 @@ function CreateColData(imageData){
 		}
 		
 	}
-	
 	return colData;
 }
 function GetPixelMask(levelPixel){
@@ -1152,7 +1149,6 @@ function GetPixelMask(levelPixel){
 }
 function GetLevelColData(levelPixel){
 	levelPixelMask = GetPixelMask(levelPixel);
-	
 	return (levelColData[levelPixelIndex] & levelPixelMask);
 }
 function SetLevelColData(levelPixel, active){
@@ -1184,7 +1180,7 @@ function UpdateLevelData(level,levelX,levelY){ //object.level could be updated i
 function FindLevel(currentLevel,levelXpos,levelYpos){
 	if(levelXpos<0)
 		return 0;
-	else if(levelXpos > Levels[Levels.length-1].canvas.width+Levels[Levels.length-1].xOffset)
+	if(levelXpos > Levels[Levels.length-1].canvas.width+Levels[Levels.length-1].xOffset)
 		return Levels.length-1;
 	
 	let newLevelLeft = levelXpos < Levels[currentLevel].xOffset;
@@ -1201,8 +1197,8 @@ function FindLevel(currentLevel,levelXpos,levelYpos){
 		
 		if(levelYpos-Levels[newLevel].yOffset < 0 || levelYpos-Levels[newLevel].yOffset >= Levels[newLevel].canvas.height) //Y-position is not in bounds of the new level
 			return currentLevel;
-		else
-			return newLevel;
+		
+		return newLevel;
 	}
 	return currentLevel;
 }
@@ -1435,10 +1431,10 @@ function CircleOverlap(distanceX, distanceY, radius){ //(slightly) optimized cir
 	
 	if(distanceX+distanceY <= radius) //inside square diamond
 		return true;
-	else if(Math.pow(distanceX,2)+Math.pow(distanceY,2) <= Math.pow(radius,2)) //inside circle
+	if(Math.pow(distanceX,2)+Math.pow(distanceY,2) <= Math.pow(radius,2)) //inside circle
 		return true;
-	else
-		return false;
+	
+	return false;
 }
 function CreateColVectors(ball){
 	let radius = ball.ballRadius;
@@ -1665,20 +1661,17 @@ function BallPlayerCollision(ball,player){
 									ball.player.score++;
 									if(ball.player.score>=winScore)
 										return true;
-									else {
-										InitializePlayer(player,false);
-										ball.player.statusVisibility=statusVisibilityLimit;
-									}
+									
+									ball.player.statusVisibility=statusVisibilityLimit;
 								} else {
 									player.lives--;
 									if(player.lives<=0){
 										player.score-=IngamePlayers.length-1; //for ranking (4th:-3, 3rd:-2, 2nd:-1, 1st:0)
 										return true;
-									} else {
-										InitializePlayer(player,false);
-										player.statusVisibility=statusVisibilityLimit;
 									}
+									player.statusVisibility=statusVisibilityLimit;
 								}
+								InitializePlayer(player,false);
 							}
 						}
 					}
@@ -1717,42 +1710,7 @@ function BallTerrainCollision(ball,ballPosDiff){
 				levelPixel = levelY*levelCanvas.width+levelX;
 
 			if(GetLevelColData(levelPixel)!==0 || outOfBounds){ //if ball hits level-terrain or is out of bounds
-				if(!noPile){
-					let blockCounter = ballVector[i].index;
-					while(i < ballVector.length){
-						if(ballVector[i].index!==blockCounter) //there's a gap in the vector
-							break;
-						
-						blockCounter++;
-						
-						levelInfo = UpdateLevelData(ball.level,ballLevelX+ballVector[i].x,ballLevelY+ballVector[i].y);
-						ball.level = levelInfo.level;
-						levelX = levelInfo.levelX;
-						levelY = levelInfo.levelY;
-						
-						if(levelX >= 0 && levelX < levelCanvas.width && levelY >= 0 && levelY < levelCanvas.height){ //pos is in bounds
-							levelPixel = levelY*levelCanvas.width+levelX;
-						
-							SetLevelColData(levelPixel,true);
-
-							if(!levelsRendered[ball.level]){
-								levelRender.save();
-								levelRender.beginPath();
-								levelsRendered[ball.level]=true;
-							}
-							levelRender.rect(levelX,levelY,1,1);
-						}
-						if(!ball.collided){
-							ball.render.save();
-							ball.render.beginPath();
-							ball.collided = true;
-						}
-						ball.render.rect(ballVector[i].x,ballVector[i].y,1,1);
-						
-						ballVector.splice(i,1); //removing empty block
-					}
-					break;
-				} else {
+				if(noPile){
 					SetLevelColData(levelPixel,false);
 					levelRender.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
 					
@@ -1767,7 +1725,42 @@ function BallTerrainCollision(ball,ballPosDiff){
 						ballVector.splice(i,1);
 						i--;
 					}
+					continue;
 				}
+				let blockCounter = ballVector[i].index;
+				while(i < ballVector.length){
+					if(ballVector[i].index!==blockCounter) //there's a gap in the vector
+						break;
+					
+					blockCounter++;
+					
+					levelInfo = UpdateLevelData(ball.level,ballLevelX+ballVector[i].x,ballLevelY+ballVector[i].y);
+					ball.level = levelInfo.level;
+					levelX = levelInfo.levelX;
+					levelY = levelInfo.levelY;
+					
+					if(levelX >= 0 && levelX < levelCanvas.width && levelY >= 0 && levelY < levelCanvas.height){ //pos is in bounds
+						levelPixel = levelY*levelCanvas.width+levelX;
+					
+						SetLevelColData(levelPixel,true);
+						
+						if(!levelsRendered[ball.level]){
+							levelRender.save();
+							levelRender.beginPath();
+							levelsRendered[ball.level]=true;
+						}
+						levelRender.rect(levelX,levelY,1,1);
+					}
+					if(!ball.collided){
+						ball.render.save();
+						ball.render.beginPath();
+						ball.collided = true;
+					}
+					ball.render.rect(ballVector[i].x,ballVector[i].y,1,1);
+					
+					ballVector.splice(i,1); //removing empty block
+				}
+				break;
 			}
 		}
 	}
@@ -1902,14 +1895,14 @@ function CheckPlayerInsideTerrain(player,posDiffX,posDiffY){
 			else if(!noBounds) //out of bounds
 				outOfBounds = true;
 			
-			if(GetLevelColData(levelPixel)!==0 || outOfBounds){
-				player.playerPosX -= posDirX;
-				player.playerPosY -= posDirY;
-				player.momentumX -= posDirX; //or player.momentumX = 0?
-				player.momentumY -= posDirY; //or player.momentumY = 0?
-				playerPosDiff--;
-			} else
+			if(GetLevelColData(levelPixel)===0 && !outOfBounds)
 				break;
+			
+			player.playerPosX -= posDirX;
+			player.playerPosY -= posDirY;
+			player.momentumX -= posDirX; //or player.momentumX = 0?
+			player.momentumY -= posDirY; //or player.momentumY = 0?
+			playerPosDiff--;
 		}
 	}
 }
@@ -2112,13 +2105,12 @@ for(let step = steps; step >= 1; step--){
 					if(gameType===GameType.score){
 						Results();
 						return;
-					} else {
-						IngamePlayers.splice(op,1);
-						op--;
-						if(IngamePlayers.length<=1){
-							Results();
-							return;
-						}
+					}
+					IngamePlayers.splice(op,1);
+					op--;
+					if(IngamePlayers.length<=1){
+						Results();
+						return;
 					}
 				}
 			}
@@ -3061,11 +3053,10 @@ function CheckElementProperties(element,elementType,parent,menu){
 					let type = (isNaN(obj)) ? obj : elementType; //isNaN(obj) means that element is not inside an array so "obj" is the elementType (title for example)
 					AddDefaultProperties(element[obj],type,parent,menu);
 				}
-				
-				if(isNaN(obj) || isNaN(elementType))
-					CheckElementProperties(element[obj],obj,element,menu);
-				else
+				if(!isNaN(obj) && !isNaN(elementType))
 					break;
+				
+				CheckElementProperties(element[obj],obj,element,menu);
 			}
 		}
 	}
@@ -3349,8 +3340,8 @@ function MouseOver(element){
 	guiX = scaledWidthHalf+element.xDiff+(element.parent.xDiff || 0); //?? 0
 	if(mouseY>=guiY && mouseY<guiY+element.height && mouseX>=guiX && mouseX<guiX+element.width)
 		return true;
-	else
-		return false;
+	
+	return false;
 }
 function CheckMouse(clicked){
 	if(optionSelected || menuAnimating)
@@ -3399,7 +3390,8 @@ function CheckMouse(clicked){
 					if(mouseX>guiX && mouseX<guiX+guiElement.width*0.25){
 						SetAdjustBox(CurrentMenu(),guiElement,-1);
 						return false;
-					} else if(mouseX>guiX+guiElement.width*0.75 && mouseX<guiX+guiElement.width){
+					}
+					if(mouseX>guiX+guiElement.width*0.75 && mouseX<guiX+guiElement.width){
 						SetAdjustBox(CurrentMenu(),guiElement,1);
 						return false;
 					}
@@ -3464,7 +3456,6 @@ function CheckMouse(clicked){
 			}
 		}
 	}
-
 	return false;
 }
 function SetAdjustBox(menu,option,change){
@@ -3901,7 +3892,8 @@ function Results(){
 						if(Players[pl].score === Players[Winners[w][0]].score){
 							Winners[w].push([Players[pl].number]);
 							break;
-						} else if(Players[pl].score > Players[Winners[w][0]].score){
+						}
+						if(Players[pl].score > Players[Winners[w][0]].score){
 							Winners.splice(w,0,[Players[pl].number]);
 							break;
 						}
@@ -4209,8 +4201,8 @@ function AnimateValue(current,target,animThreshold=0,animSteps={steps:steps}){ /
 		if(Math.sign(newAnimDistance)!==Math.sign(animDistance)){ //|| Math.abs(newAnimDistance)<multipliedAnimThreshold ?
 			current=target;
 			break;
-		} else
-			animDistance = newAnimDistance;
+		}
+		animDistance = newAnimDistance;
 	}
 	return current;
 }
