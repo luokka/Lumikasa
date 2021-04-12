@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4B6";
+const version = "0x4B9";
 
 function TimeNow(){
 	//return Date.now();
@@ -79,12 +79,10 @@ let loadStageCount = StageImages.length;
 let initStageCount = loadStageCount;
 
 let Levels = [];
-let levelsRendered = [];
 for(let i = 0; i < LevelImages.length; i++){
 	Levels.push(new Image());
 	Levels[i].onload = function(){if(!skipAdventure)loadLevelCount--;};
 	Levels[i].src = LevelImages[i];
-	levelsRendered.push(false);
 }
 let Stages = [];
 for(let i = 0; i < StageImages.length; i++){
@@ -101,9 +99,18 @@ function GetLastStageRow(){
 let stageCanvas = document.createElement('canvas');
 let stageRender = stageCanvas.getContext('2d');
 
-let levelCanvas;
-let levelRender;
-let levelColData, levelPixelIndex = 0, levelPixelBit = 0, levelPixelMask = 0;
+let terrain = {
+	canvas:null,
+	render:null,
+	colData:[],
+	collided:new Array(Levels.length),
+	ResetCollided(){
+		let collidedLength = gameMode===GameMode.adventure ? this.collided.length : 1;
+		for(let c = 0; c < collidedLength; c++)
+			this.collided[c] = false;
+	}
+};
+let terrainPixelIndex = 0, terrainPixelBit = 0, terrainPixelMask = 0;
 
 let mouseX = 0, mouseY = 0, mouseDraw = -1, mouseDrag = false;
 let mouseAxisX = 0, mouseAxisY = 0;
@@ -599,17 +606,15 @@ function DirectionalKey(player, inputType, state, value){
 		player.rightValue = value;
 	}
 	
-	if(!loadingScreen && activeMenu!==null && state){
-		if(playerConfirm)
-			return;
-		
-		if(!oldState)
-			directionInputTime = TimeNow();
-		else if(TimeNow()-directionInputTime < directionInputRepeatInterval)
-			return;
-		
-		NavigateGUI(inputType);
-	}
+	if(loadingScreen || playerConfirm || activeMenu===null || !state)
+		return;
+	
+	if(!oldState)
+		directionInputTime = TimeNow();
+	else if(TimeNow()-directionInputTime < directionInputRepeatInterval)
+		return;
+	
+	NavigateGUI(inputType);
 } function JumpKey(player, state){
 	if(state){
 		if(player.newJump){
@@ -668,49 +673,48 @@ function DirectionalKey(player, inputType, state, value){
 	}
 	player.pauseKey = state;
 } function Aim(player,x=null,y=null){ //both x and y = null -> Update AimX/Y
-	if(x!==null)
-		player.aimAxisX=x;
-	if(y!==null)
-		player.aimAxisY=y;
-	if(x===null && y===null){ //Update AimX/Y
-		let mouseXaim = false, mouseYaim = false;
-		if(player.number===InputMethods[0].player){ //keyboard&mouse
-			let Bind = KeyBindings[player.number];
-			//checking if mouseAxis is assigned to aimAxes
-			for(let type = Input.aimXneg; type <= Input.aimXpos; type++)
-			for(let axis = 0; axis < Bind[type].input.length; axis++)
-				mouseXaim = (Bind[type].input[axis][1] === 'm' || mouseXaim);
-			
-			for(let type = Input.aimYneg; type <= Input.aimYpos; type++)
-			for(let axis = 0; axis < Bind[type].input.length; axis++)
-				mouseYaim = (Bind[type].input[axis][1] === 'm' || mouseYaim);
-		}
-		if(mouseXaim)
-			player.aimX=(player.aimAxisX*screenWidth+screenWidth)/2/areaScale;
-		else {
-			player.aimX=player.playerPosX+player.playerRadius;
-			
-			if(player.aimAxisX<0)
-				player.aimX+=(player.playerPosX+player.playerRadius)*player.aimAxisX;
-			else if(player.aimAxisX>0)
-				player.aimX+=(screenWidth/areaScale-player.playerPosX-player.playerRadius)*player.aimAxisX;
-		}
-		if(mouseYaim)
-			player.aimY=(player.aimAxisY*screenHeight+screenHeight)/2/areaScale;
-		else {
-			player.aimY=player.playerPosY+player.playerRadius;
-			
-			if(player.aimAxisY<0)
-				player.aimY+=(player.playerPosY+player.playerRadius)*player.aimAxisY;
-			else if(player.aimAxisY>0)
-				player.aimY+=(screenHeight/areaScale-player.playerPosY-player.playerRadius)*player.aimAxisY;
-		}
-
-		if(player.aimAxisX === 0 && player.aimAxisY === 0)
-			player.aimCentered = true;
-		else
-			player.aimCentered = false;
+	if(x!==null || y!==null){
+		if(x!==null) player.aimAxisX = x;
+		if(y!==null) player.aimAxisY = y;
+		return;
 	}
+	//Update AimX/Y
+	let mouseXaim = false, mouseYaim = false;
+	if(player.number===InputMethods[0].player){ //keyboard&mouse
+		let Bind = KeyBindings[player.number];
+		//checking if mouseAxis is assigned to aimAxes
+		for(let type = Input.aimXneg; type <= Input.aimXpos; type++)
+		for(let axis = 0; axis < Bind[type].input.length; axis++)
+			mouseXaim = (Bind[type].input[axis][1] === 'm' || mouseXaim);
+		
+		for(let type = Input.aimYneg; type <= Input.aimYpos; type++)
+		for(let axis = 0; axis < Bind[type].input.length; axis++)
+			mouseYaim = (Bind[type].input[axis][1] === 'm' || mouseYaim);
+	}
+	if(mouseXaim)
+		player.aimX=(player.aimAxisX*screenWidth+screenWidth)/2/areaScale;
+	else {
+		player.aimX=player.playerPosX+player.playerRadius;
+		
+		if(player.aimAxisX<0)
+			player.aimX+=(player.playerPosX+player.playerRadius)*player.aimAxisX;
+		else if(player.aimAxisX>0)
+			player.aimX+=(screenWidth/areaScale-player.playerPosX-player.playerRadius)*player.aimAxisX;
+	}
+	if(mouseYaim)
+		player.aimY=(player.aimAxisY*screenHeight+screenHeight)/2/areaScale;
+	else {
+		player.aimY=player.playerPosY+player.playerRadius;
+		
+		if(player.aimAxisY<0)
+			player.aimY+=(player.playerPosY+player.playerRadius)*player.aimAxisY;
+		else if(player.aimAxisY>0)
+			player.aimY+=(screenHeight/areaScale-player.playerPosY-player.playerRadius)*player.aimAxisY;
+	}
+	if(player.aimAxisX === 0 && player.aimAxisY === 0)
+		player.aimCentered = true;
+	else
+		player.aimCentered = false;
 }
 function SetInput(inputType,inputState,player,value){
 	if(inputType === Input.up || inputType === Input.down || inputType === Input.left || inputType === Input.right)
@@ -783,38 +787,36 @@ function UpdateMousePos(x,y){
 	mouseAxisY = mouseY/(scaledHeightHalf)-1;
 }
 document.addEventListener('keydown', function(event){
+	if(event.code==="")
+		return;
 	if(keyBinding){
 		if(Players[activePlayer].inputMethod===0){
-			if(event.code!==""){
-				SetKeyBinding(activePlayer, activeBinding, event.code.replace('Key',''), event.code);
-				StopKeyBinding();
-			}
-		}
+			SetKeyBinding(activePlayer, activeBinding, event.code.replace('Key',''), event.code);
+			StopKeyBinding();
+		} event.preventDefault();
+	}
+	else if(loadingScreen && loadingDone && event.code === "Enter")
+		loadingScreen = false;
+	else if(InputUpdate(event.code,InputMethods[0].player,1))
 		event.preventDefault();
-	} else if(event.code!==""){
-		if(loadingScreen && loadingDone && event.code === "Enter")
-			loadingScreen = false;
-		else if(InputUpdate(event.code,InputMethods[0].player,1))
-			event.preventDefault();
-		else {
-			if(event.code === "Escape" && document.fullscreenElement)
+	else {
+		if(event.code === "Escape" && document.fullscreenElement)
+			document.exitFullscreen();
+		else if(event.code === "KeyF" || event.code === "F4"){ //Enable fullscreen
+			if(document.fullscreenElement)
 				document.exitFullscreen();
-			else if(event.code === "KeyF" || event.code === "F4"){ //Enable fullscreen
-				if(document.fullscreenElement)
-					document.exitFullscreen();
-				else
-					gameCanvas.requestFullscreen();
-				
-				event.preventDefault();
-			} else {
-				let keys = Object.keys(DebugKeys);
-				for(let dk = 0; dk < keys.length; dk++){
-					if(event.code === DebugKeys[keys[dk]].name){
-						DebugKeys[keys[dk]]();
-						break;
-					}
-					if(!debugMode) break; //other DebugKeys (dk > 0) are checked only in debugMode
+			else
+				gameCanvas.requestFullscreen();
+			
+			event.preventDefault();
+		} else {
+			let keys = Object.keys(DebugKeys);
+			for(let dk = 0; dk < keys.length; dk++){
+				if(event.code === DebugKeys[keys[dk]].name){
+					DebugKeys[keys[dk]]();
+					break;
 				}
+				if(!debugMode) break; //other DebugKeys (dk > 0) are checked only in debugMode
 			}
 		}
 	}
@@ -907,72 +909,72 @@ gameCanvas.addEventListener('wheel', function(event){
 		}
 		event.preventDefault();
 	}
-	if(activeSubmenu===GUI.battle && !playerConfirm && Stages.length>0){
-		if(MouseOver(GUI.battle.background[0])){
-			if(Math.sign(scrollBuffer)!==Math.sign(event.deltaY)) //if scrolling to opposite direction
-				scrollBuffer = event.deltaY;
-			else
-				scrollBuffer += event.deltaY;
-			if(Math.abs(scrollBuffer)>=1){
-				stageRow += Math.sign(scrollBuffer);
-				
-				let clampedStageRow = Clamp(stageRow, 0, GetLastStageRow());
-				if(stageRow !== clampedStageRow)
-					stageRow = clampedStageRow;
-				else if(selectedOption.parent === GUI.battle.background[0]){
-					let clampedStageButton = Clamp(selectedOption.stage+Math.sign(scrollBuffer)*stageColumnCount, 0, Stages.length-1);
-					selectedOption = GUI.battle.stagebutton[clampedStageButton];
-				}
-				scrollBuffer = 0;
+	if(activeSubmenu===GUI.battle && !playerConfirm && Stages.length>0)
+	if(MouseOver(GUI.battle.background[0])){
+		if(Math.sign(scrollBuffer)!==Math.sign(event.deltaY)) //if scrolling to opposite direction
+			scrollBuffer = event.deltaY;
+		else
+			scrollBuffer += event.deltaY;
+		if(Math.abs(scrollBuffer)>=1){
+			stageRow += Math.sign(scrollBuffer);
+			
+			let clampedStageRow = Clamp(stageRow, 0, GetLastStageRow());
+			if(stageRow !== clampedStageRow)
+				stageRow = clampedStageRow;
+			else if(selectedOption.parent === GUI.battle.background[0]){
+				let clampedStageButton = Clamp(selectedOption.stage+Math.sign(scrollBuffer)*stageColumnCount, 0, Stages.length-1);
+				selectedOption = GUI.battle.stagebutton[clampedStageButton];
 			}
-			event.preventDefault();
+			scrollBuffer = 0;
 		}
-	} else {
-		/*if(Math.sign(scrollAxisX)!==Math.sign(event.deltaX) && event.deltaX!==0) //reset X to center if opposite movement
-			scrollAxisX = 0;
-		if(Math.sign(scrollAxisY)!==Math.sign(event.deltaY) && event.deltaY!==0) //reset Y to center if opposite movement
-			scrollAxisY = 0;*/
-		scrollAxisX = Clamp(scrollAxisX+event.deltaX/100, -1, 1);
-		scrollAxisY = Clamp(scrollAxisY+event.deltaY/100, -1, 1);
-		
-		if(InputUpdate("-sX",InputMethods[0].player,Math.min(scrollAxisX,0)))
-			event.preventDefault();
-		if(InputUpdate("+sX",InputMethods[0].player,Math.max(scrollAxisX,0)))
-			event.preventDefault();
-
-		if(InputUpdate("-sY",InputMethods[0].player,Math.min(scrollAxisY,0)))
-			event.preventDefault();
-		if(InputUpdate("+sY",InputMethods[0].player,Math.max(scrollAxisY,0)))
-			event.preventDefault();
+		event.preventDefault();
+		return;
 	}
+	/*if(Math.sign(scrollAxisX)!==Math.sign(event.deltaX) && event.deltaX!==0) //reset X to center if opposite movement
+		scrollAxisX = 0;
+	if(Math.sign(scrollAxisY)!==Math.sign(event.deltaY) && event.deltaY!==0) //reset Y to center if opposite movement
+		scrollAxisY = 0;*/
+	scrollAxisX = Clamp(scrollAxisX+event.deltaX/100, -1, 1);
+	scrollAxisY = Clamp(scrollAxisY+event.deltaY/100, -1, 1);
+	
+	if(InputUpdate("-sX",InputMethods[0].player,Math.min(scrollAxisX,0)))
+		event.preventDefault();
+	if(InputUpdate("+sX",InputMethods[0].player,Math.max(scrollAxisX,0)))
+		event.preventDefault();
+	
+	if(InputUpdate("-sY",InputMethods[0].player,Math.min(scrollAxisY,0)))
+		event.preventDefault();
+	if(InputUpdate("+sY",InputMethods[0].player,Math.max(scrollAxisY,0)))
+		event.preventDefault();
 });
 gameCanvas.addEventListener('drop', function(event){
 	event.preventDefault();
 	for(let i = 0; i < event.dataTransfer.files.length; i++){
-		if(activeSubmenu===GUI.battle && !playerConfirm && !menuAnimating){
-			let customStageImage = new Image();
-			customStageImage.src = URL.createObjectURL(event.dataTransfer.files[i]);
-			
-			loadStageCount++;
-			
-			customStageImage.onerror = function(){
-				//alert("Could not load image.");
-				loadStageCount--;
-			};
-			customStageImage.onload = function(){
-				Stages.push(this);
-				
-				AddStageButton(Stages.length-1,this.naturalWidth,this.naturalHeight);
-				
-				if(activeSubmenu===GUI.battle && !playerConfirm && !menuAnimating){
-					stageRow = GetLastStageRow();
-					selectedOption = GUI.battle.stagebutton[Stages.length-1];
-				}
-				
-				loadStageCount--;
-			};
-		} else
+		if(activeSubmenu!==GUI.battle || playerConfirm || menuAnimating){
 			gameCanvas.style.backgroundImage = "url('"+URL.createObjectURL(event.dataTransfer.files[i])+"')";
+			break;
+		}
+		let customStageImage = new Image();
+		customStageImage.src = URL.createObjectURL(event.dataTransfer.files[i]);
+		
+		loadStageCount++;
+		
+		customStageImage.onerror = function(){
+			//alert("Could not load image.");
+			loadStageCount--;
+		};
+		customStageImage.onload = function(){
+			Stages.push(this);
+			
+			AddStageButton(Stages.length-1,this.naturalWidth,this.naturalHeight);
+			
+			if(activeSubmenu===GUI.battle && !playerConfirm && !menuAnimating){
+				stageRow = GetLastStageRow();
+				selectedOption = GUI.battle.stagebutton[Stages.length-1];
+			}
+			
+			loadStageCount--;
+		};
 	}
 });
 gameCanvas.addEventListener('dragover', function(event){
@@ -1143,26 +1145,26 @@ function CreateColData(imageData){
 	return colData;
 }
 function GetPixelMask(levelPixel){
-	levelPixelIndex = levelPixel >> 3;
-	levelPixelBit = levelPixel-(levelPixelIndex << 3);
-	return (1 << levelPixelBit);
+	terrainPixelIndex = levelPixel >> 3;
+	terrainPixelBit = levelPixel-(terrainPixelIndex << 3);
+	return (1 << terrainPixelBit);
 }
 function GetLevelColData(levelPixel){
-	levelPixelMask = GetPixelMask(levelPixel);
-	return (levelColData[levelPixelIndex] & levelPixelMask);
+	terrainPixelMask = GetPixelMask(levelPixel);
+	return (terrain.colData[terrainPixelIndex] & terrainPixelMask);
 }
 function SetLevelColData(levelPixel, active){
-	levelPixelMask = GetPixelMask(levelPixel);
+	terrainPixelMask = GetPixelMask(levelPixel);
 	
 	if(active)
-		levelColData[levelPixelIndex] |= levelPixelMask;
+		terrain.colData[terrainPixelIndex] |= terrainPixelMask;
 	else
-		levelColData[levelPixelIndex] &= ~levelPixelMask;
+		terrain.colData[terrainPixelIndex] &= ~terrainPixelMask;
 }
-function SetLevelProperties(level){
-	levelCanvas = Levels[level].canvas;
-	levelRender = Levels[level].render;
-	levelColData = Levels[level].colData;
+function SetTerrainProperties(level){
+	terrain.canvas = Levels[level].canvas;
+	terrain.render = Levels[level].render;
+	terrain.colData = Levels[level].colData;
 }
 function UpdateLevelData(level,levelX,levelY){ //object.level could be updated in this function already?
 	let newLevelX = levelX;
@@ -1170,7 +1172,7 @@ function UpdateLevelData(level,levelX,levelY){ //object.level could be updated i
 	let newLevel = 0;
 	if(gameMode===GameMode.adventure){
 		newLevel = FindLevel(level,newLevelX,newLevelY);
-		SetLevelProperties(newLevel);
+		SetTerrainProperties(newLevel);
 		
 		newLevelX -= Levels[newLevel].xOffset;
 		newLevelY -= Levels[newLevel].yOffset;
@@ -1185,22 +1187,22 @@ function FindLevel(currentLevel,levelXpos,levelYpos){
 	
 	let newLevelLeft = levelXpos < Levels[currentLevel].xOffset;
 	let newLevelRight = levelXpos >= Levels[currentLevel].canvas.width+Levels[currentLevel].xOffset;
-	if(newLevelLeft || newLevelRight){
-		let newLevel = 0;
-		let checkTarget = (newLevelLeft) ? 0 : Levels.length-1;
-		let checkDirection = (newLevelLeft) ? -1 : 1;
-		
-		for(newLevel = currentLevel; newLevel !== checkTarget; newLevel+=checkDirection){
-			if(levelXpos >= Levels[newLevel].xOffset && levelXpos < Levels[newLevel].canvas.width+Levels[newLevel].xOffset) //X-position is in bounds of the new level
-				break;
-		}
-		
-		if(levelYpos-Levels[newLevel].yOffset < 0 || levelYpos-Levels[newLevel].yOffset >= Levels[newLevel].canvas.height) //Y-position is not in bounds of the new level
-			return currentLevel;
-		
-		return newLevel;
+	if(!newLevelLeft && !newLevelRight)
+		return currentLevel;
+	
+	let newLevel = 0;
+	let checkTarget = (newLevelLeft) ? 0 : Levels.length-1;
+	let checkDirection = (newLevelLeft) ? -1 : 1;
+	
+	for(newLevel = currentLevel; newLevel !== checkTarget; newLevel+=checkDirection){
+		if(levelXpos >= Levels[newLevel].xOffset && levelXpos < Levels[newLevel].canvas.width+Levels[newLevel].xOffset) //X-position is in bounds of the new level
+			break;
 	}
-	return currentLevel;
+	
+	if(levelYpos-Levels[newLevel].yOffset < 0 || levelYpos-Levels[newLevel].yOffset >= Levels[newLevel].canvas.height) //Y-position is not in bounds of the new level
+		return currentLevel;
+	
+	return newLevel;
 }
 function LoadLevel(index){
 	if(activeMenu!==null || loadingScreen)
@@ -1212,12 +1214,12 @@ function LoadLevel(index){
 			levelIndex=Levels.length-1;
 		else if(levelIndex>=Levels.length || levelIndex===null) //failsafe
 			levelIndex=0;
-
-		SetLevelProperties(levelIndex);
-
+		
+		SetTerrainProperties(levelIndex);
+		
 		for(let p = 0; p < IngamePlayers.length; p++)
 			IngamePlayers[p].level = levelIndex;
-
+		
 		levelPosX = -Levels[levelIndex].xOffset;
 		levelPosY = -Levels[levelIndex].yOffset;
 	} else {
@@ -1225,17 +1227,17 @@ function LoadLevel(index){
 			levelIndex=Stages.length-1;
 		else if(levelIndex>=Stages.length || levelIndex===null) //failsafe
 			levelIndex=0;
-
+		
 		stageCanvas.width = Stages[levelIndex].naturalWidth;
 		stageCanvas.height = Stages[levelIndex].naturalHeight;
 		stageRender = stageCanvas.getContext('2d');
-
-		levelCanvas = stageCanvas;
-		levelRender = stageRender;
-
-		levelRender.drawImage(Stages[levelIndex], 0, 0 );
 		
-		levelColData = CreateColData(levelRender.getImageData(0, 0, levelCanvas.width, levelCanvas.height).data);
+		terrain.canvas = stageCanvas;
+		terrain.render = stageRender;
+		
+		terrain.render.drawImage(Stages[levelIndex], 0, 0 );
+		
+		terrain.colData = CreateColData(terrain.render.getImageData(0, 0, terrain.canvas.width, terrain.canvas.height).data);
 	}
 	InitializePlayers();
 }
@@ -1296,15 +1298,15 @@ function InitializePlayer(player,newGame){
 	let spawnPosY = levelPosY; //default for battleMode
 	if(gameMode===GameMode.battle){
 		let spawnPositions = [];
-		let colWidth = Math.ceil(levelCanvas.width/8);
-		let colHeight = levelCanvas.height;
+		let colWidth = Math.ceil(terrain.canvas.width/8);
+		let colHeight = terrain.canvas.height;
 		for(let cY = 0; cY < colHeight-31; cY+=8){ //finding all empty spots in the stage large enough for spawning (8x8 grid based, 32x32 minimum spawn area)
 			spawnSearchLoop2:
 			for(let cX = 0; cX < colWidth-4; cX++){
-				if(levelColData[cY*colWidth+cX]===0){
+				if(terrain.colData[cY*colWidth+cX]===0){
 					for(let cYs = 0; cYs < 32; cYs++){
 						let col = (cY+cYs)*colWidth+cX;
-						if(levelColData[col] + levelColData[col+1] + levelColData[col+2] + levelColData[col+3] > 0)
+						if(terrain.colData[col] + terrain.colData[col+1] + terrain.colData[col+2] + terrain.colData[col+3] > 0)
 							continue spawnSearchLoop2;
 					}
 					spawnPositions.push({x:(cX << 3),y:cY}); //cX multiply by 8
@@ -1425,6 +1427,44 @@ function ChargeShot(change, ball){
 	
 	ball.render.drawImage(player.copyCanvas, 0, 0, ball.ballSize, ball.ballSize);
 }
+function PlayerHit(player, enemy){
+	if(gameMode===GameMode.adventure){
+		player.pixelCount+=1;
+		if(player.pixelCount>=player.pixelCountMax)
+			ChangeSize(1,player);
+	} else if(player.invulnerability <= 0){
+		player.pixelCount-=2; //enemy shots decrease size at double rate
+		if(player.pixelCount<=0){
+			ChangeSize(-1,player);
+			player.pixelCount = player.pixelCountMax;
+			if(player.sizeLevel <= -10){
+				PlaySound(player.Sounds.death);
+				if(player.Balls.length > 0){ //removing unshot ball
+					let latestBall = player.Balls[player.Balls.length-1];
+					if(!latestBall.isMoving)
+						RemoveShot(latestBall);
+				}
+				if(gameType===GameType.score){
+					//player.score = Math.max(player.score-1,0);
+					enemy.score++;
+					if(enemy.score>=winScore)
+						return true;
+					
+					enemy.statusVisibility=statusVisibilityLimit;
+				} else {
+					player.lives--;
+					if(player.lives<=0){
+						player.score-=IngamePlayers.length-1; //for ranking (4th:-3, 3rd:-2, 2nd:-1, 1st:0)
+						return true;
+					}
+					player.statusVisibility=statusVisibilityLimit;
+				}
+				InitializePlayer(player,false);
+			}
+		}
+	}
+	return false;
+}
 function CircleOverlap(distanceX, distanceY, radius){ //(slightly) optimized circle collision
 	distanceX = Math.abs(distanceX);
 	distanceY = Math.abs(distanceY);
@@ -1534,87 +1574,83 @@ function CreateColVectors(ball){
 		}
 	} while(ballNotFull || blockIndex < ball.Vectors[refVectorIndex].length);
 }
+function SetClipPixel(object, x, y, level=null){
+	let collided = (level===null) ? object.collided : object.collided[level];
+	if(!collided){
+		object.render.save();
+		object.render.beginPath();
+		if(level===null) object.collided = true;
+		else object.collided[level] = true;
+	}
+	object.render.rect(x,y,1,1);
+}
 function BallBallCollision(ball1,ball2){
 	let ball2Y = ball2.ballPosY+ball2.ballRadius;
 	let ball2X = ball2.ballPosX+ball2.ballRadius;
-	if(CircleOverlap(ball2X-ballX, ball2Y-ballY, ball2.ballRadius+ball1.ballRadius+1)){
-		for(let v = 0; v < ball1.Vectors.length; v++){
-			let ballVector = ball1.Vectors[v];
-			if(ball2.isMoving){
-				for(let v2 = 0; v2 < ball2.Vectors.length; v2++){
-					let ballVector2 = ball2.Vectors[v2];
-					
-					let bX1 = ballVector[0].x, bX2 = ballVector[ballVector.length-1].x;
-					let b2X1 = ballVector2[0].x, b2X2 = ballVector2[ballVector2.length-1].x;
-					let bXmin = Math.min(bX1,bX2)+ball1.ballPosX;
-					let bXmax = Math.max(bX1,bX2)+ball1.ballPosX;
-					let b2Xmin = Math.min(b2X1,b2X2)+ball2.ballPosX;
-					let b2Xmax = Math.max(b2X1,b2X2)+ball2.ballPosX;
-					let xOverlap = (bXmin <= b2Xmax) && (b2Xmin <= bXmax);
-					
-					let bY1 = ballVector[0].y, bY2 = ballVector[ballVector.length-1].y;
-					let b2Y1 = ballVector2[0].y, b2Y2 = ballVector2[ballVector2.length-1].y;
-					let bYmin = Math.min(bY1,bY2)+ball1.ballPosY;
-					let bYmax = Math.max(bY1,bY2)+ball1.ballPosY;
-					let b2Ymin = Math.min(b2Y1,b2Y2)+ball2.ballPosY;
-					let b2Ymax = Math.max(b2Y1,b2Y2)+ball2.ballPosY;
-					let yOverlap = (bYmin <= b2Ymax) && (b2Ymin <= bYmax);
-					
-					if(xOverlap && yOverlap){ //vector-vector (line-line) collision
-						while(ballVector.length > 0){
-							let levelInfo = UpdateLevelData(ball1.level,ballLevelX+ballVector[0].x,ballLevelY+ballVector[0].y);
-							ball1.level = levelInfo.level;
-							let levelX = levelInfo.levelX;
-							let levelY = levelInfo.levelY;
+	if(!CircleOverlap(ball2X-ballX, ball2Y-ballY, ball2.ballRadius+ball1.ballRadius+1))
+		return;
+	for(let v = 0; v < ball1.Vectors.length; v++){
+		let ballVector = ball1.Vectors[v];
+		if(ball2.isMoving){
+			for(let v2 = 0; v2 < ball2.Vectors.length; v2++){
+				let ballVector2 = ball2.Vectors[v2];
+				
+				let bX1 = ballVector[0].x, bX2 = ballVector[ballVector.length-1].x;
+				let b2X1 = ballVector2[0].x, b2X2 = ballVector2[ballVector2.length-1].x;
+				let bXmin = Math.min(bX1,bX2)+ball1.ballPosX;
+				let bXmax = Math.max(bX1,bX2)+ball1.ballPosX;
+				let b2Xmin = Math.min(b2X1,b2X2)+ball2.ballPosX;
+				let b2Xmax = Math.max(b2X1,b2X2)+ball2.ballPosX;
+				let xOverlap = (bXmin <= b2Xmax) && (b2Xmin <= bXmax);
+				
+				let bY1 = ballVector[0].y, bY2 = ballVector[ballVector.length-1].y;
+				let b2Y1 = ballVector2[0].y, b2Y2 = ballVector2[ballVector2.length-1].y;
+				let bYmin = Math.min(bY1,bY2)+ball1.ballPosY;
+				let bYmax = Math.max(bY1,bY2)+ball1.ballPosY;
+				let b2Ymin = Math.min(b2Y1,b2Y2)+ball2.ballPosY;
+				let b2Ymax = Math.max(b2Y1,b2Y2)+ball2.ballPosY;
+				let yOverlap = (bYmin <= b2Ymax) && (b2Ymin <= bYmax);
+				
+				if(xOverlap && yOverlap){ //vector-vector (line-line) collision
+					while(ballVector.length > 0){
+						let levelInfo = UpdateLevelData(ball1.level,ballLevelX+ballVector[0].x,ballLevelY+ballVector[0].y);
+						ball1.level = levelInfo.level;
+						let levelX = levelInfo.levelX;
+						let levelY = levelInfo.levelY;
+						
+						if(levelX >= 0 && levelX < terrain.canvas.width && levelY >= 0 && levelY < terrain.canvas.height){ //pos is in bounds
+							let levelPixel = levelY*terrain.canvas.width+levelX;
 							
-							if(levelX >= 0 && levelX < levelCanvas.width && levelY >= 0 && levelY < levelCanvas.height){ //pos is in bounds
-								let levelPixel = levelY*levelCanvas.width+levelX;
-								
-								SetLevelColData(levelPixel,true);
-								
-								if(!levelsRendered[ball1.level]){
-									levelRender.save();
-									levelRender.beginPath();
-									levelsRendered[ball1.level]=true;
-								}
-								levelRender.rect(levelX,levelY,1,1);
-							}
-							if(!ball1.collided){
-								ball1.render.save();
-								ball1.render.beginPath();
-								ball1.collided = true;
-							}
-							ball1.render.rect(ballVector[0].x,ballVector[0].y,1,1);
+							SetLevelColData(levelPixel,true);
 							
-							ballVector.splice(0,1); //removing empty block
+							SetClipPixel(terrain, levelX, levelY, ball1.level);
 						}
-						break;
+						
+						SetClipPixel(ball1, ballVector[0].x, ballVector[0].y);
+						
+						ballVector.splice(0,1); //removing empty block
 					}
+					break;
 				}
-			} else { //ball-shield
-				for(let i = 0; i < ballVector.length; i+=updateInterval){
-					let ballBlockY = ball1.ballPosY+ballVector[i].y;
-					let ballBlockX = ball1.ballPosX+ballVector[i].x;
-					if(CircleOverlap(ball2X-ballBlockX, ball2Y-ballBlockY, ball2.ballRadius)){
-						ball2.hitCount+=1;
-						if(ball2.hitCount>=ball2.hitLimit){
-							if(gameMode===GameMode.adventure)
-								ChargeShot(1, ball2);
-							else
-								ChargeShot(-1, ball2);
-							ball2.hitCount=0;
-						}
-						
-						if(!ball1.collided){
-							ball1.render.save();
-							ball1.render.beginPath();
-							ball1.collided = true;
-						}
-						ball1.render.rect(ballVector[i].x,ballVector[i].y,1,1);
-						
-						ballVector.splice(i,1); //removing empty block
-						i-=updateInterval;
+			}
+		} else { //ball-shield
+			for(let i = 0; i < ballVector.length; i+=updateInterval){
+				let ballBlockY = ball1.ballPosY+ballVector[i].y;
+				let ballBlockX = ball1.ballPosX+ballVector[i].x;
+				if(CircleOverlap(ball2X-ballBlockX, ball2Y-ballBlockY, ball2.ballRadius)){
+					ball2.hitCount+=1;
+					if(ball2.hitCount>=ball2.hitLimit){
+						if(gameMode===GameMode.adventure)
+							ChargeShot(1, ball2);
+						else
+							ChargeShot(-1, ball2);
+						ball2.hitCount=0;
 					}
+					
+					SetClipPixel(ball1, ballVector[i].x, ballVector[i].y);
+					
+					ballVector.splice(i,1); //removing empty block
+					i-=updateInterval;
 				}
 			}
 		}
@@ -1623,59 +1659,21 @@ function BallBallCollision(ball1,ball2){
 function BallPlayerCollision(ball,player){
 	let playerY = player.playerPosY+player.playerRadius;
 	let playerX = player.playerPosX+player.playerRadius;
-	if(CircleOverlap(playerX-ballX, playerY-ballY, player.playerRadius+ball.ballRadius+1)){
-		for(let v = 0; v < ball.Vectors.length; v++){
-			let ballVector = ball.Vectors[v];
-			for(let i = 0; i < ballVector.length; i+=updateInterval){
-				let ballBlockY = ball.ballPosY+ballVector[i].y;
-				let ballBlockX = ball.ballPosX+ballVector[i].x;
-				if(CircleOverlap(playerX-ballBlockX, playerY-ballBlockY, player.playerRadius)){
-					if(!ball.collided){
-						ball.render.save();
-						ball.render.beginPath();
-						ball.collided = true;
-					}
-					ball.render.rect(ballVector[i].x,ballVector[i].y,1,1);
-					
-					ballVector.splice(i,1); //removing empty block
-					i-=updateInterval;
-					
-					if(gameMode===GameMode.adventure){
-						player.pixelCount+=1;
-						if(player.pixelCount>=player.pixelCountMax)
-							ChangeSize(1,player);
-					} else if(player.invulnerability <= 0){
-						player.pixelCount-=2; //enemy shots decrease size at double rate
-						if(player.pixelCount<=0){
-							ChangeSize(-1,player);
-							player.pixelCount = player.pixelCountMax;
-							if(player.sizeLevel <= -10){
-								PlaySound(player.Sounds.death);
-								if(player.Balls.length > 0){ //removing unshot ball
-									let latestBall = player.Balls[player.Balls.length-1];
-									if(!latestBall.isMoving)
-										RemoveShot(latestBall);
-								}
-								if(gameType===GameType.score){
-									//player.score = Math.max(player.score-1,0);
-									ball.player.score++;
-									if(ball.player.score>=winScore)
-										return true;
-									
-									ball.player.statusVisibility=statusVisibilityLimit;
-								} else {
-									player.lives--;
-									if(player.lives<=0){
-										player.score-=IngamePlayers.length-1; //for ranking (4th:-3, 3rd:-2, 2nd:-1, 1st:0)
-										return true;
-									}
-									player.statusVisibility=statusVisibilityLimit;
-								}
-								InitializePlayer(player,false);
-							}
-						}
-					}
-				}
+	if(!CircleOverlap(playerX-ballX, playerY-ballY, player.playerRadius+ball.ballRadius+1))
+		return false;
+	for(let v = 0; v < ball.Vectors.length; v++){
+		let ballVector = ball.Vectors[v];
+		for(let i = 0; i < ballVector.length; i+=updateInterval){
+			let ballBlockY = ball.ballPosY+ballVector[i].y;
+			let ballBlockX = ball.ballPosX+ballVector[i].x;
+			if(CircleOverlap(playerX-ballBlockX, playerY-ballBlockY, player.playerRadius)){
+				SetClipPixel(ball, ballVector[i].x, ballVector[i].y);
+				
+				ballVector.splice(i,1); //removing empty block
+				i-=updateInterval;
+				
+				if(PlayerHit(player, ball.player))
+					return true;
 			}
 		}
 	}
@@ -1699,28 +1697,23 @@ function BallTerrainCollision(ball,ballPosDiff){
 			
 			let outOfBounds = false;
 			let levelPixel = -1;
-			if(levelX < 0 || levelX >= levelCanvas.width || levelY < 0 || levelY >= levelCanvas.height){
+			if(levelX < 0 || levelX >= terrain.canvas.width || levelY < 0 || levelY >= terrain.canvas.height){
 				if(!noBounds){
 					outOfBounds = true;
-					levelY = Clamp(levelY, 0, levelCanvas.height-1); //Clamping Y-position in bounds
-					levelX = Clamp(levelX, 0, levelCanvas.width-1); //Clamping X-position in bounds
-					levelPixel = levelY*levelCanvas.width+levelX;
+					levelY = Clamp(levelY, 0, terrain.canvas.height-1); //Clamping Y-position in bounds
+					levelX = Clamp(levelX, 0, terrain.canvas.width-1); //Clamping X-position in bounds
+					levelPixel = levelY*terrain.canvas.width+levelX;
 				}
 			} else
-				levelPixel = levelY*levelCanvas.width+levelX;
+				levelPixel = levelY*terrain.canvas.width+levelX;
 
 			if(GetLevelColData(levelPixel)!==0 || outOfBounds){ //if ball hits level-terrain or is out of bounds
 				if(noPile){
 					SetLevelColData(levelPixel,false);
-					levelRender.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
+					terrain.render.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
 					
 					if(outOfBounds){
-						if(!ball.collided){
-							ball.render.save();
-							ball.render.beginPath();
-							ball.collided = true;
-						}
-						ball.render.rect(ballVector[i].x,ballVector[i].y,1,1);
+						SetClipPixel(ball, ballVector[i].x, ballVector[i].y);
 						
 						ballVector.splice(i,1);
 						i--;
@@ -1739,24 +1732,14 @@ function BallTerrainCollision(ball,ballPosDiff){
 					levelX = levelInfo.levelX;
 					levelY = levelInfo.levelY;
 					
-					if(levelX >= 0 && levelX < levelCanvas.width && levelY >= 0 && levelY < levelCanvas.height){ //pos is in bounds
-						levelPixel = levelY*levelCanvas.width+levelX;
+					if(levelX >= 0 && levelX < terrain.canvas.width && levelY >= 0 && levelY < terrain.canvas.height){ //pos is in bounds
+						levelPixel = levelY*terrain.canvas.width+levelX;
 					
 						SetLevelColData(levelPixel,true);
 						
-						if(!levelsRendered[ball.level]){
-							levelRender.save();
-							levelRender.beginPath();
-							levelsRendered[ball.level]=true;
-						}
-						levelRender.rect(levelX,levelY,1,1);
+						SetClipPixel(terrain, levelX, levelY, ball.level);
 					}
-					if(!ball.collided){
-						ball.render.save();
-						ball.render.beginPath();
-						ball.collided = true;
-					}
-					ball.render.rect(ballVector[i].x,ballVector[i].y,1,1);
+					SetClipPixel(ball, ballVector[i].x, ballVector[i].y);
 					
 					ballVector.splice(i,1); //removing empty block
 				}
@@ -1767,8 +1750,7 @@ function BallTerrainCollision(ball,ballPosDiff){
 }
 function PlayerTerrainCollision(player){
 	player.onGround=false;
-	for(let l = 0; l < ((gameMode===GameMode.adventure) ? Levels.length : 1); l++)
-		levelsRendered[l] = false;
+	terrain.ResetCollided();
 	
 	for(let i = 0; i < player.colPoints.length; i++){
 		let blockX = player.colPoints[i].x;
@@ -1782,21 +1764,21 @@ function PlayerTerrainCollision(player){
 		let levelPixel = -1;
 		let outOfBounds = false;
 		
-		if(levelX>=0 && levelX<levelCanvas.width && levelY>=0 && levelY<levelCanvas.height) //in bounds
-			levelPixel = levelY*levelCanvas.width+levelX;
+		if(levelX>=0 && levelX<terrain.canvas.width && levelY>=0 && levelY<terrain.canvas.height) //in bounds
+			levelPixel = levelY*terrain.canvas.width+levelX;
 		else if(!noBounds){ //out of bounds
 			outOfBounds = true;
 			if(levelX<-player.colMiddle){
 				player.playerPosX-=levelX;
 				player.momentumX = Math.max(player.momentumX,0);
-			} else if(levelX>=levelCanvas.width+player.colMiddle){
-				player.playerPosX-=levelX-(levelCanvas.width-1);
+			} else if(levelX>=terrain.canvas.width+player.colMiddle){
+				player.playerPosX-=levelX-(terrain.canvas.width-1);
 				player.momentumX = Math.min(player.momentumX,0);
 			} if(levelY<-player.colMiddle){
 				player.playerPosY-=levelY;
 				player.momentumY = Math.max(player.momentumY,0);
-			} else if(levelY>=levelCanvas.height+player.colMiddle){
-				player.playerPosY-=levelY-(levelCanvas.height-1);
+			} else if(levelY>=terrain.canvas.height+player.colMiddle){
+				player.playerPosY-=levelY-(terrain.canvas.height-1);
 				player.momentumY = Math.min(player.momentumY,0);
 			}
 		}
@@ -1844,17 +1826,17 @@ function PlayerTerrainCollision(player){
 			if((collectCharge || !player.charging) && !player.chargeHold){ //OR "if((collectCharge && !player.chargeHold) || !player.charging)"?
 				if(player.rotMomentum!==0 && !outOfBounds){ //can't collect snow without rotating
 					if(!noGrow){
-						if(!levelsRendered[player.level]){
+						if(!terrain.collided[player.level]){
 							let xOffset = 0;
 							let yOffset = 0;
 							if(gameMode===GameMode.adventure){
 								xOffset = Levels[player.level].xOffset;
 								yOffset = Levels[player.level].yOffset;
 							}
-							player.render.drawImage(levelCanvas,
+							player.render.drawImage(terrain.canvas,
 							Math.floor(levelPosX-player.playerPosX+xOffset), //xOffset is always 0 in battleMode
 							Math.floor(levelPosY-player.playerPosY+yOffset)); //yOffset is always 0 in battleMode
-							levelsRendered[player.level]=true;
+							terrain.collided[player.level] = true;
 						}
 						player.pixelCount += Math.ceil(speedMultiplier/2); //collects snow faster
 						snowRate = SnowRate(1.002,0.05);
@@ -1862,8 +1844,8 @@ function PlayerTerrainCollision(player){
 							ChangeSize(1,player);
 					}
 					if(!noCollect){
-						levelRender.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
-						SetLevelColData(levelPixel,false); //alternative: levelColData[levelPixelIndex] &= ~levelPixelMask;
+						terrain.render.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
+						SetLevelColData(levelPixel,false); //alternative: terrain.colData[terrainPixelIndex] &= ~terrainPixelMask;
 					}
 				}
 			}
@@ -1874,36 +1856,37 @@ function CheckPlayerInsideTerrain(player,posDiffX,posDiffY){
 	let posDiffSum = Math.hypot(posDiffX,posDiffY);
 	let playerPosDiff = Math.floor(posDiffSum);
 	
-	if(playerPosDiff>maxSpeed){ //speed threshold (using maxSpeed because maxDropSpeed is too high)
-		let posDirX = posDiffX/posDiffSum;
-		let posDirY = posDiffY/posDiffSum;
+	if(playerPosDiff<=maxSpeed) //speed threshold (using maxSpeed because maxDropSpeed is too high)
+		return;
+	
+	let posDirX = posDiffX/posDiffSum;
+	let posDirY = posDiffY/posDiffSum;
+	
+	while(playerPosDiff>0){
+		let blockX = player.colMiddle; //-posDirX*player.colMiddle+player.colMiddle
+		let blockY = player.colMiddle; //-posDirY*player.colMiddle+player.colMiddle
 		
-		while(playerPosDiff>0){
-			let blockX = player.colMiddle; //-posDirX*player.colMiddle+player.colMiddle
-			let blockY = player.colMiddle; //-posDirY*player.colMiddle+player.colMiddle
-			
-			let levelInfo = UpdateLevelData(player.level,Math.floor(player.playerPosX-levelPosX+blockX),Math.floor(player.playerPosY-levelPosY+blockY));
-			player.level = levelInfo.level;
-			let levelX = levelInfo.levelX;
-			let levelY = levelInfo.levelY;
-			
-			let levelPixel = -1;
-			let outOfBounds = false;
-			
-			if(levelX>=0 && levelX<levelCanvas.width && levelY>=0 && levelY<levelCanvas.height) //in bounds
-				levelPixel = levelY*levelCanvas.width+levelX;
-			else if(!noBounds) //out of bounds
-				outOfBounds = true;
-			
-			if(GetLevelColData(levelPixel)===0 && !outOfBounds)
-				break;
-			
-			player.playerPosX -= posDirX;
-			player.playerPosY -= posDirY;
-			player.momentumX -= posDirX; //or player.momentumX = 0?
-			player.momentumY -= posDirY; //or player.momentumY = 0?
-			playerPosDiff--;
-		}
+		let levelInfo = UpdateLevelData(player.level,Math.floor(player.playerPosX-levelPosX+blockX),Math.floor(player.playerPosY-levelPosY+blockY));
+		player.level = levelInfo.level;
+		let levelX = levelInfo.levelX;
+		let levelY = levelInfo.levelY;
+		
+		let levelPixel = -1;
+		let outOfBounds = false;
+		
+		if(levelX>=0 && levelX<terrain.canvas.width && levelY>=0 && levelY<terrain.canvas.height) //in bounds
+			levelPixel = levelY*terrain.canvas.width+levelX;
+		else if(!noBounds) //out of bounds
+			outOfBounds = true;
+		
+		if(GetLevelColData(levelPixel)===0 && !outOfBounds)
+			break;
+		
+		player.playerPosX -= posDirX;
+		player.playerPosY -= posDirY;
+		player.momentumX -= posDirX; //or player.momentumX = 0?
+		player.momentumY -= posDirY; //or player.momentumY = 0?
+		playerPosDiff--;
 	}
 }
 function GameLogic(){
@@ -2073,8 +2056,7 @@ for(let step = steps; step >= 1; step--){
 			if(!ball.isMoving)
 				continue;
 			
-			for(let l = 0; l < ((gameMode===GameMode.adventure) ? Levels.length : 1); l++)
-				levelsRendered[l] = false;
+			terrain.ResetCollided();
 
 			let prevBallPosX = ball.ballPosX;
 			let prevBallPosY = ball.ballPosY;
@@ -2120,20 +2102,19 @@ for(let step = steps; step >= 1; step--){
 			ball.firstColCheck = false;
 			if(ball.collided){
 				snowRate = SnowRate(1.02,0.5);
-				for(let l = 0; l < levelsRendered.length; l++){
-					if(levelsRendered[l]){
+				let collidedLength = gameMode===GameMode.adventure ? terrain.collided.length : 1;
+				for(let l = 0; l < collidedLength; l++){
+					if(terrain.collided[l]){
 						let xOffset = 0;
 						let yOffset = 0;
 						if(gameMode===GameMode.adventure){
 							xOffset = Levels[l].xOffset;
 							yOffset = Levels[l].yOffset;
-							levelRender = Levels[l].render;
+							terrain.render = Levels[l].render;
 						}
-						levelRender.clip();
-						levelRender.drawImage(ball.canvas,ballLevelX-xOffset,ballLevelY-yOffset);
-						levelRender.restore();
-						if(gameMode===GameMode.battle)
-							break; //battleMode only uses level 0
+						terrain.render.clip();
+						terrain.render.drawImage(ball.canvas,ballLevelX-xOffset,ballLevelY-yOffset);
+						terrain.render.restore();
 					}
 				}
 				ball.render.clip();
@@ -2160,7 +2141,7 @@ for(let step = steps; step >= 1; step--){
 	if(fixedCamera){
 		let xOffset = 0;
 		let yOffset = 0;
-		let areaCanvas = levelCanvas;
+		let areaCanvas = terrain.canvas;
 		if(gameMode===GameMode.adventure){
 			let l = Players[firstJoined].level;
 			xOffset = Levels[l].xOffset;
@@ -2201,9 +2182,9 @@ for(let step = steps; step >= 1; step--){
 			}
 		}
 		/*if(!noCameraBounds){
-			areaScale = Math.min(screenWidth,screenHeight)/(Math.min(levelCanvas.width,levelCanvas.height)/2);
-			let newAreaScale1 = (screenWidth*aimMargin)/Math.min((maxX-minX),levelCanvas.width*aimMargin);
-			let newAreaScale2 = (screenHeight*aimMargin)/Math.min((maxY-minY),levelCanvas.height*aimMargin);
+			areaScale = Math.min(screenWidth,screenHeight)/(Math.min(terrain.canvas.width,terrain.canvas.height)/2);
+			let newAreaScale1 = (screenWidth*aimMargin)/Math.min((maxX-minX),terrain.canvas.width*aimMargin);
+			let newAreaScale2 = (screenHeight*aimMargin)/Math.min((maxY-minY),terrain.canvas.height*aimMargin);
 			areaScale = Math.min(areaScale,newAreaScale1,newAreaScale2);
 		} else {*/
 		areaScale = Math.min(screenWidth,screenHeight)/aimArea;
@@ -2221,20 +2202,20 @@ for(let step = steps; step >= 1; step--){
 		let yPositionChange = scaledMiddlePointY-playersCenterY;
 		
 		/*if(!noCameraBounds){
-			if(levelCanvas.width*areaScale > screenWidth){
+			if(terrain.canvas.width*areaScale > screenWidth){
 				if(levelPosX+xPositionChange > 0)
 					xPositionChange -= levelPosX+xPositionChange;
-				else if(levelPosX+xPositionChange < screenWidth/areaScale-levelCanvas.width)
-					xPositionChange -= (levelPosX+xPositionChange)-(screenWidth/areaScale-levelCanvas.width);
+				else if(levelPosX+xPositionChange < screenWidth/areaScale-terrain.canvas.width)
+					xPositionChange -= (levelPosX+xPositionChange)-(screenWidth/areaScale-terrain.canvas.width);
 			} else
-				xPositionChange -= (levelPosX+xPositionChange)-(screenWidth/areaScale-levelCanvas.width)/2;
-			if(levelCanvas.height*areaScale > screenHeight){
+				xPositionChange -= (levelPosX+xPositionChange)-(screenWidth/areaScale-terrain.canvas.width)/2;
+			if(terrain.canvas.height*areaScale > screenHeight){
 				if(levelPosY+yPositionChange > 0)
 					yPositionChange -= levelPosY+yPositionChange;
-				else if(levelPosY+yPositionChange < screenHeight/areaScale-levelCanvas.height)
-					yPositionChange -= (levelPosY+yPositionChange)-(screenHeight/areaScale-levelCanvas.height);
+				else if(levelPosY+yPositionChange < screenHeight/areaScale-terrain.canvas.height)
+					yPositionChange -= (levelPosY+yPositionChange)-(screenHeight/areaScale-terrain.canvas.height);
 			} else
-				yPositionChange -= (levelPosY+yPositionChange)-(screenHeight/areaScale-levelCanvas.height)/2;
+				yPositionChange -= (levelPosY+yPositionChange)-(screenHeight/areaScale-terrain.canvas.height)/2;
 		}*/
 		levelPosX += xPositionChange;
 		levelPosY += yPositionChange;
@@ -2279,10 +2260,10 @@ for(let step = steps; step >= 1; step--){
 		}
 	} else {
 		let scaledLevelPosX = levelPosX*areaScale, scaledLevelPosY = levelPosY*areaScale;
-		let scaledLevelWidth = levelCanvas.width*areaScale, scaledLevelHeight = levelCanvas.height*areaScale;
+		let scaledLevelWidth = terrain.canvas.width*areaScale, scaledLevelHeight = terrain.canvas.height*areaScale;
 		
 		gameRender.clearRect(scaledLevelPosX, scaledLevelPosY, scaledLevelWidth, scaledLevelHeight);
-		gameRender.drawImage(levelCanvas,0,0,levelCanvas.width,levelCanvas.height,scaledLevelPosX,scaledLevelPosY,scaledLevelWidth,scaledLevelHeight);
+		gameRender.drawImage(terrain.canvas,0,0,terrain.canvas.width,terrain.canvas.height,scaledLevelPosX,scaledLevelPosY,scaledLevelWidth,scaledLevelHeight);
 	}
 	
 	if(IngamePlayers.length>1){
@@ -3884,19 +3865,19 @@ function Results(){
 		
 		let Winners = [];
 		for(let pl = 1; pl < Players.length; pl++){
-			if(Players[pl].joined){
-				if(Winners.length===0 || Players[pl].score < Players[Winners[Winners.length-1][0]].score)
-					Winners.push([Players[pl].number]);
-				else {
-					for(let w = 0; w < Winners.length; w++){
-						if(Players[pl].score === Players[Winners[w][0]].score){
-							Winners[w].push([Players[pl].number]);
-							break;
-						}
-						if(Players[pl].score > Players[Winners[w][0]].score){
-							Winners.splice(w,0,[Players[pl].number]);
-							break;
-						}
+			if(!Players[pl].joined)
+				continue;
+			if(Winners.length===0 || Players[pl].score < Players[Winners[Winners.length-1][0]].score)
+				Winners.push([Players[pl].number]);
+			else {
+				for(let w = 0; w < Winners.length; w++){
+					if(Players[pl].score === Players[Winners[w][0]].score){
+						Winners[w].push([Players[pl].number]);
+						break;
+					}
+					if(Players[pl].score > Players[Winners[w][0]].score){
+						Winners.splice(w,0,[Players[pl].number]);
+						break;
 					}
 				}
 			}
@@ -4285,18 +4266,18 @@ function PlayerConfirmWindow(){
 	RenderElements(GUI.playerConfirm);
 }
 function ConfirmPlayers(){
-	if(firstJoined !== 0){
-		playerConfirm = false;
-		selectedOption = (activeSubmenu===GUI.adventure) ? GUI.adventure.button[0] : GUI.battle.dropdown[0];
-
-		let menuElement = (activeSubmenu===GUI.adventure) ? GUI.adventure.title : GUI.battle.title;
-		menuElement.targetHeight = menuElement.orgTargetHeight;
-		
-		menuAnimating = true;
-		animMenu = {menu:menuElement,show:true};
-		
-		PlaySound(Sounds.confirm);
-	}
+	if(firstJoined === 0)
+		return;
+	
+	playerConfirm = false;
+	selectedOption = (activeSubmenu===GUI.adventure) ? GUI.adventure.button[0] : GUI.battle.dropdown[0];
+	
+	let menuElement = (activeSubmenu===GUI.adventure) ? GUI.adventure.title : GUI.battle.title;
+	menuElement.targetHeight = menuElement.orgTargetHeight;
+	menuAnimating = true;
+	animMenu = {menu:menuElement,show:true};
+	
+	PlaySound(Sounds.confirm);
 }
 let timeoutTimer = 0;
 function KeyBindingTimer(){
@@ -4342,7 +4323,7 @@ function DebugInfo(){
 	guiRender.textAlign="left";
 	
 	if(gameStarted && activeMenu===null){
-		guiRender.fillText("Level: X:"+levelPosX.toFixed(1)+"  Y:"+levelPosY.toFixed(1)+"  Width:"+levelCanvas.width+"  Height:"+levelCanvas.height+"  AreaScale: "+areaScale.toFixed(4)+((fixedCamera) ? "(fixed)" : "("+1*aimArea.toFixed(2)+"|"+1*aimMargin.toFixed(4)+")"),4,20);
+		guiRender.fillText("Level: X:"+levelPosX.toFixed(1)+"  Y:"+levelPosY.toFixed(1)+"  Width:"+terrain.canvas.width+"  Height:"+terrain.canvas.height+"  AreaScale: "+areaScale.toFixed(4)+((fixedCamera) ? "(fixed)" : "("+1*aimArea.toFixed(2)+"|"+1*aimMargin.toFixed(4)+")"),4,20);
 		
 		let pCount = 0;
 		for(let p = 1; p < Players.length; p++){
