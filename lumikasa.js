@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4B9";
+const version = "0x4BA";
 
 function TimeNow(){
 	//return Date.now();
@@ -426,6 +426,7 @@ let infiniteJump = false;
 let wallJump = false;
 let noKnockback = false;
 let fixedCamera = false;
+let imageSmooth = true;
 let shotSpeed = 5;
 let winScore = 5;
 let lifeCount = 3;
@@ -496,18 +497,22 @@ let DebugKeys = {
 		guiScaleOn=!guiScaleOn;
 		ScreenSize();
 	},
-	KeyZ(){
+	KeyN(){
 		if(pixelScale>1)pixelScale--;
 		ScreenSize();
 	},
-	KeyB(){
+	KeyM(){
 		pixelScale++;
+		ScreenSize();
+	},
+	KeyZ(){
+		imageSmooth=!imageSmooth;
 		ScreenSize();
 	},
 	KeyC(){noClear=!noClear;},
 	KeyV(){vsync=!vsync;},
-	KeyN(){LoadLevel(--levelIndex);},
-	KeyM(){LoadLevel(++levelIndex);},
+	KeyJ(){LoadLevel(--levelIndex);},
+	KeyL(){LoadLevel(++levelIndex);},
 	Home(){updateInterval++;},
 	End(){if(updateInterval>1) updateInterval--;},
 	PageUp(){UpdateMultiplier(++speedMultiplier);},
@@ -560,6 +565,8 @@ function ScreenSize(){ //Initialize game screen and update middlePoint (if scree
 		guiRender.scale(guiScale,guiScale);
 	} else
 		guiScale = 1;
+	
+	gameRender.imageSmoothingEnabled = guiRender.imageSmoothingEnabled = imageSmooth;
 
 	scaledWidth = screenWidth/guiScale;
 	scaledHeight = screenHeight/guiScale;
@@ -809,15 +816,9 @@ document.addEventListener('keydown', function(event){
 				gameCanvas.requestFullscreen();
 			
 			event.preventDefault();
-		} else {
-			let keys = Object.keys(DebugKeys);
-			for(let dk = 0; dk < keys.length; dk++){
-				if(event.code === DebugKeys[keys[dk]].name){
-					DebugKeys[keys[dk]]();
-					break;
-				}
-				if(!debugMode) break; //other DebugKeys (dk > 0) are checked only in debugMode
-			}
+		} else if(DebugKeys.hasOwnProperty(event.code)){
+			if(debugMode || event.code === Object.keys(DebugKeys)[0])//other DebugKeys are checked only in debugMode
+				DebugKeys[event.code]();
 		}
 	}
 });
@@ -1144,17 +1145,17 @@ function CreateColData(imageData){
 	}
 	return colData;
 }
-function GetPixelMask(levelPixel){
-	terrainPixelIndex = levelPixel >> 3;
-	terrainPixelBit = levelPixel-(terrainPixelIndex << 3);
+function GetPixelMask(terrainPixel){
+	terrainPixelIndex = terrainPixel >> 3;
+	terrainPixelBit = terrainPixel-(terrainPixelIndex << 3);
 	return (1 << terrainPixelBit);
 }
-function GetLevelColData(levelPixel){
-	terrainPixelMask = GetPixelMask(levelPixel);
+function GetLevelColData(terrainPixel){
+	terrainPixelMask = GetPixelMask(terrainPixel);
 	return (terrain.colData[terrainPixelIndex] & terrainPixelMask);
 }
-function SetLevelColData(levelPixel, active){
-	terrainPixelMask = GetPixelMask(levelPixel);
+function SetLevelColData(terrainPixel, active){
+	terrainPixelMask = GetPixelMask(terrainPixel);
 	
 	if(active)
 		terrain.colData[terrainPixelIndex] |= terrainPixelMask;
@@ -1706,7 +1707,7 @@ function BallTerrainCollision(ball,ballPosDiff){
 				}
 			} else
 				levelPixel = levelY*terrain.canvas.width+levelX;
-
+			
 			if(GetLevelColData(levelPixel)!==0 || outOfBounds){ //if ball hits level-terrain or is out of bounds
 				if(noPile){
 					SetLevelColData(levelPixel,false);
@@ -1734,7 +1735,7 @@ function BallTerrainCollision(ball,ballPosDiff){
 					
 					if(levelX >= 0 && levelX < terrain.canvas.width && levelY >= 0 && levelY < terrain.canvas.height){ //pos is in bounds
 						levelPixel = levelY*terrain.canvas.width+levelX;
-					
+						
 						SetLevelColData(levelPixel,true);
 						
 						SetClipPixel(terrain, levelX, levelY, ball.level);
@@ -4362,11 +4363,11 @@ function DebugInfo(){
 	guiRender.fillText("[8]instantCharge: "+instantCharge,xPos,scaledHeight-70);
 	guiRender.fillText("[9]wallJump: "+wallJump,xPos,scaledHeight-50);
 	guiRender.fillText("[0]infiniteJump: "+infiniteJump,xPos,scaledHeight-30);
-	guiRender.fillText("[N/M]stage-/+  [,]frameHold  [.]frameStep",xPos,scaledHeight-10);
-	guiRender.fillText("[Z/B]pixelScale: "+pixelScale+"%("+pixelRatio+") [X]guiScale: "+guiScale.toFixed(4)+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
+	guiRender.fillText("[J/L]stage-/+  [,]frameHold  [.]frameStep",xPos,scaledHeight-10);
+	guiRender.fillText("[N/M]pixelScale: "+pixelScale+"%("+pixelRatio+") [X]guiScale: "+guiScale.toFixed(4)+" [Z]smooth: "+imageSmooth+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
 	
 	PerfInfo.Update(TimeNow());
-	guiRender.fillText(screenWidth+"x"+screenHeight+" | "+PerfInfo.frameInfo+" | "+PerfInfo.fpsInfo,scaledWidth-5,20);
+	guiRender.fillText(1*screenWidth.toFixed(4)+"x"+1*screenHeight.toFixed(4)+" | "+PerfInfo.frameInfo+" | "+PerfInfo.fpsInfo,scaledWidth-5,20);
 }
 function LogoDraw(){
 	let mouseIsDrawing = false;
