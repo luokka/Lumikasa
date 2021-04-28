@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4BA";
+const version = "0x4BB";
 
 function TimeNow(){
 	//return Date.now();
@@ -4502,6 +4502,9 @@ function InitializeLevels(){
 		initLevelCount = 0;
 		return;
 	}
+	if(initLevelCount>1)	
+		setTimeout(InitializeLevels, 0);
+	
 	let i = Levels.length-initLevelCount;
 	
 	Levels[i].canvas = document.createElement('canvas');
@@ -4521,23 +4524,20 @@ function InitializeLevels(){
 	Levels[i].colData = CreateColData(Levels[i].render.getImageData(0, 0, Levels[i].canvas.width, Levels[i].canvas.height).data);
 	
 	initLevelCount--;
-	
-	if(initLevelCount>0)	
-		setTimeout(InitializeLevels, 0);
 }
 let initStages = false;
 tempCanvas.width = GUI.battle.background[0].width;
 tempCanvas.height = GUI.battle.background[0].height;
 function InitializeStages(){
+	if(initStageCount>1)
+		setTimeout(InitializeStages, 0);
+	
 	let i = Stages.length-initStageCount;
 	
 	tempRender.drawImage(Stages[i],0,0,tempCanvas.width,tempCanvas.height); //cache stages
 	AddStageButton(i,Stages[i].naturalWidth,Stages[i].naturalHeight);
 	
 	initStageCount--;
-	
-	if(initStageCount>0)
-		setTimeout(InitializeStages, 0);
 }
 let loadingBarProgress = 0, loadingBarTarget = 0;
 function LoadingScreen(){
@@ -4601,6 +4601,11 @@ function LoadingScreen(){
 	}
 }
 function GameLoop(){ //main loop
+	if(vsync)
+		window.requestAnimationFrame(GameLoop);
+	else
+		setTimeout(GameLoop, 0);
+	
 	gameCanvas.style.cursor = (gameStarted && activeMenu===null) ? 'none' : 'auto';
 	
 	CheckGamepads(); //polling gamepad inputs
@@ -4630,11 +4635,6 @@ function GameLoop(){ //main loop
 		
 		gameRender.drawImage(guiCanvas, 0, 0);
 	}
-	
-	if(vsync)
-		window.requestAnimationFrame(GameLoop);
-	else
-		setTimeout(GameLoop, 0);
 }
 LoadGame();
 ScreenSize();
