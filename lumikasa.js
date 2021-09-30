@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4BB";
+const version = "0x4BC";
 
 function TimeNow(){
 	//return Date.now();
@@ -117,22 +117,14 @@ let mouseAxisX = 0, mouseAxisY = 0;
 let scrollAxisX = 0, scrollAxisY = 0;
 let oldMouseX = 0, oldMouseY = 0;
 
-let Crosshair = [new Image(),new Image(),new Image(),new Image(),new Image()];
-Crosshair[0].src = "assets/crosshair1.gif";
-Crosshair[1].src = "assets/crosshair1.gif";
-Crosshair[2].src = "assets/crosshair2.gif";
-Crosshair[3].src = "assets/crosshair3.gif";
-Crosshair[4].src = "assets/crosshair4.gif";
-let loadCrossCount = Crosshair.length;
-let crossOffsetX = 0;
-let crossOffsetY = 0;
-for(let i = 0; i < Crosshair.length; i++){
+let Crosshair = [null,new Image(),new Image(),new Image(),new Image()];
+let loadCrossCount = Crosshair.length-1;
+for(let i = 1; i < Crosshair.length; i++){
+	Crosshair[i].src = "assets/crosshair"+i+".gif";
 	Crosshair[i].onload = function(){
 		loadCrossCount--;
-		if(crossOffsetX === 0 && crossOffsetY === 0){
-			crossOffsetX = this.naturalWidth/2;
-			crossOffsetY = this.naturalHeight/2;
-		}
+		this.xOffset = this.naturalWidth/2;
+		this.yOffset = this.naturalHeight/2;
 	};
 }
 let aimArea = 1000;
@@ -2304,6 +2296,8 @@ for(let step = steps; step >= 1; step--){
 			gameRender.lineTo(player.aimX*areaScale,player.aimY*areaScale);
 			gameRender.strokeStyle=PlayerColors[player.number].color;
 			gameRender.stroke();
+			let crossOffsetX = Crosshair[player.number].xOffset;
+			let crossOffsetY = Crosshair[player.number].yOffset;
 			gameRender.drawImage(Crosshair[player.number],0,0,crossOffsetX*2,crossOffsetY*2,(player.aimX*areaScale)-crossOffsetX*guiScale,(player.aimY*areaScale)-crossOffsetY*guiScale,crossOffsetX*2*guiScale,crossOffsetY*2*guiScale); //crosshair scales with resolution
 			//gameRender.drawImage(Crosshair[player.number],(player.aimX*areaScale)-crossOffsetX,(player.aimY*areaScale)-crossOffsetY); //crosshair does not scale with resolution
 		}
