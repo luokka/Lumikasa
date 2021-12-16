@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4BC";
+const version = "0x4BD";
 
 function TimeNow(){
 	//return Date.now();
@@ -503,12 +503,12 @@ let DebugKeys = {
 	},
 	KeyC(){noClear=!noClear;},
 	KeyV(){vsync=!vsync;},
-	KeyJ(){LoadLevel(--levelIndex);},
-	KeyL(){LoadLevel(++levelIndex);},
+	KeyJ(){LoadLevel(levelIndex-1);},
+	KeyL(){LoadLevel(levelIndex+1);},
 	Home(){updateInterval++;},
 	End(){if(updateInterval>1) updateInterval--;},
-	PageUp(){UpdateMultiplier(++speedMultiplier);},
-	PageDown(){UpdateMultiplier(--speedMultiplier);},
+	PageUp(){UpdateMultiplier(speedMultiplier+1);},
+	PageDown(){UpdateMultiplier(speedMultiplier-1);},
 	Digit1(){noClip=!noClip;},
 	Digit2(){noBounds=!noBounds;},
 	Digit3(){noCollect=!noCollect;},
@@ -570,7 +570,15 @@ function ScreenSize(){ //Initialize game screen and update middlePoint (if scree
 	middlePointY = screenHeight/2;
 }
 function UpdateMultiplier(value){ //pre-calculate movement values
-	speedMultiplier = (value>1) ? value : 1;
+	let newSpeedMultiplier = (value>1) ? value : 1;
+	let speedModifier = newSpeedMultiplier/speedMultiplier;
+	speedMultiplier = newSpeedMultiplier;
+	
+	for(let p = 0; p < IngamePlayers.length; p++){
+		IngamePlayers[p].momentumX *= speedModifier;
+		IngamePlayers[p].momentumY *= speedModifier;
+		IngamePlayers[p].rotMomentum *= speedModifier;
+	}
 	
 	maxSpeed = baseMaxSpeed*speedMultiplier;
 	positionCorrection = basePositionCorrection*speedMultiplier;
