@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4BD";
+const version = "0x4BE";
 
 function TimeNow(){
 	//return Date.now();
@@ -819,6 +819,7 @@ document.addEventListener('keydown', function(event){
 		} else if(DebugKeys.hasOwnProperty(event.code)){
 			if(debugMode || event.code === Object.keys(DebugKeys)[0])//other DebugKeys are checked only in debugMode
 				DebugKeys[event.code]();
+			event.preventDefault();
 		}
 	}
 });
