@@ -1,7 +1,7 @@
 ﻿'use strict';
 
-//Lumikasa source code (Luokkanen Janne, 2015-2021)
-const version = "0x4BE";
+//Lumikasa source code (Luokkanen Janne, 2015-2022)
+const version = "0x4BF";
 
 function TimeNow(){
 	//return Date.now();
@@ -20,7 +20,7 @@ let animForce = 0.025, menuAnimThreshold = 0.25;
 let menuBgColor = "#000000DD", menuBorderColor = "#00AAAA", menuTextColor = "#FFFF00", menuTextFadeColor = "#777700", menuTitleColor = "#FFFFFF";
 let optionBgColor = "#000000DD", optionBorderColor = "#00AAAA", optionTextColor = "#00AAAA", optionFadeColor = "#005555";
 let optionBgHighlightColor = "#000000DD", optionBorderHighlightColor = "#FFFFFF", optionTextHighlightColor = "#FFFFFF";
-let	plainTextColor = "#FFFFFF", playerTextColor = "#000000";
+let plainTextColor = "#FFFFFF", playerTextColor = "#000000";
 let PlayerColors = [null,
 {color:"#0000FF", fadeColor:"#000077", bgColor:"#CCCCFF", bgFadeColor:"#666677"}, //player1
 {color:"#FF0000", fadeColor:"#770000", bgColor:"#FFCCCC", bgFadeColor:"#776666"}, //player2
@@ -503,8 +503,12 @@ let DebugKeys = {
 	},
 	KeyC(){noClear=!noClear;},
 	KeyV(){vsync=!vsync;},
-	KeyJ(){LoadLevel(levelIndex-1);},
-	KeyL(){LoadLevel(levelIndex+1);},
+	KeyG(){LoadLevel(levelIndex-1);},
+	KeyH(){LoadLevel(levelIndex+1);},
+	KeyJ(){aimMargin = Clamp(aimMargin*0.98, 0.0001, 1);},
+	KeyL(){aimMargin = Clamp(aimMargin*1.02, 0.0001, 1);},
+	KeyI(){aimArea = Clamp(aimArea*0.98, 1, Infinity);},
+	KeyK(){aimArea = Clamp(aimArea*1.02, 1, Infinity);},
 	Home(){updateInterval++;},
 	End(){if(updateInterval>1) updateInterval--;},
 	PageUp(){UpdateMultiplier(speedMultiplier+1);},
@@ -521,11 +525,7 @@ let DebugKeys = {
 	Digit0(){infiniteJump=!infiniteJump;},
 	Backquote(){fixedCamera=!fixedCamera;},
 	Minus(){if(shotSpeed>0) shotSpeed--;},
-	Equal(){shotSpeed++;},
-	BracketLeft(){aimMargin = Clamp(aimMargin*0.98, 0.0001, 1);},
-	BracketRight(){aimMargin = Clamp(aimMargin*1.02, 0.0001, 1);},
-	Semicolon(){aimArea = Clamp(aimArea*0.98, 1, Infinity);},
-	Quote(){aimArea = Clamp(aimArea*1.02, 1, Infinity);}
+	Equal(){shotSpeed++;}
 };
 let GameMode = {
 	adventure:0,
@@ -4323,11 +4323,11 @@ function DebugInfo(){
 	guiRender.fillStyle="#00FF00";
 	guiRender.font="15px Arial";
 	
-	let xPos=0, yPos=0;
+	let xPos=4, yPos=20, yStep=20;
 	guiRender.textAlign="left";
 	
 	if(gameStarted && activeMenu===null){
-		guiRender.fillText("Level: X:"+levelPosX.toFixed(1)+"  Y:"+levelPosY.toFixed(1)+"  Width:"+terrain.canvas.width+"  Height:"+terrain.canvas.height+"  AreaScale: "+areaScale.toFixed(4)+((fixedCamera) ? "(fixed)" : "("+1*aimArea.toFixed(2)+"|"+1*aimMargin.toFixed(4)+")"),4,20);
+		guiRender.fillText("Level: X:"+levelPosX.toFixed(1)+"  Y:"+levelPosY.toFixed(1)+"  Width:"+terrain.canvas.width+"  Height:"+terrain.canvas.height+"  [I/K|J/L]AreaScale: "+areaScale.toFixed(4)+((fixedCamera) ? "(fixed)" : "("+1*aimArea.toFixed(2)+"|"+1*aimMargin.toFixed(4)+")"),xPos,yPos);
 		
 		let pCount = 0;
 		for(let p = 1; p < Players.length; p++){
@@ -4335,11 +4335,11 @@ function DebugInfo(){
 			if(!player.joined)
 				continue;
 			
-			yPos = pCount*90;
-			guiRender.fillText("P"+p+") X:"+player.playerPosX.toFixed(1)+"  Y:"+player.playerPosY.toFixed(1)+"  Width:"+player.playerWidth+"  Height:"+player.playerHeight+"  SizeLevel:"+player.sizeLevel,4,50+yPos);
-			guiRender.fillText("PixelCount:"+player.pixelCount.toFixed(0)+"  PixelCountMax:"+player.pixelCountMax+"  BallCount:"+player.Balls.length,40,70+yPos);
-			guiRender.fillText("Momentum: X:"+player.momentumX.toFixed(3)+"  Y:"+player.momentumY.toFixed(3)+"  Rotation:"+player.rotMomentum.toFixed(3),40,90+yPos);
-			guiRender.fillText("JumpTimer: "+player.jumpTimer+"  OnGround: "+player.onGround,40,110+yPos);
+			yPos = pCount*90+30;
+			guiRender.fillText("P"+p+") X:"+player.playerPosX.toFixed(1)+"  Y:"+player.playerPosY.toFixed(1)+"  Width:"+player.playerWidth+"  Height:"+player.playerHeight+"  SizeLevel:"+player.sizeLevel,xPos,yPos+=yStep);
+			guiRender.fillText("PixelCount:"+player.pixelCount.toFixed(0)+"  PixelCountMax:"+player.pixelCountMax+"  BallCount:"+player.Balls.length,xPos+36,yPos+=yStep);
+			guiRender.fillText("Momentum: X:"+player.momentumX.toFixed(3)+"  Y:"+player.momentumY.toFixed(3)+"  Rotation:"+player.rotMomentum.toFixed(3),xPos+36,yPos+=yStep);
+			guiRender.fillText("JumpTimer: "+player.jumpTimer+"  OnGround: "+player.onGround,xPos+36,yPos+=yStep);
 			
 			pCount++;
 		}
@@ -4349,25 +4349,27 @@ function DebugInfo(){
 		guiRender.fillText("P"+p+") "+playerInputs,xPos,scaledHeight+20*(p-5));
 	}
 	
-	xPos = scaledWidth-4;
+	xPos = scaledWidth-4; yPos = 20;
 	guiRender.textAlign="right";
-	guiRender.fillText("[Home/End]UpdateInterval: "+updateInterval+"ms",xPos,60);
-	guiRender.fillText("[PgUp/PgDn]SpeedMultiplier: "+speedMultiplier+"x",xPos,80);
-	guiRender.fillText("Mode: "+Object.keys(GameMode)[gameMode]+" Type: "+Object.keys(GameType)[gameType],xPos,100);
+	guiRender.fillText("[N/M]pixelScale: "+pixelScale+"%("+pixelRatio+") [X]guiScale: "+guiScale.toFixed(4)+" [Z]smooth: "+imageSmooth+" [C]noClear: "+noClear+" [V]vsync: "+vsync,xPos,yPos+=yStep);
+	guiRender.fillText("[Home/End]UpdateInterval: "+updateInterval+"ms",xPos,yPos+=yStep);
+	guiRender.fillText("[PgUp/PgDn]SpeedMultiplier: "+speedMultiplier+"x",xPos,yPos+=yStep);
+	guiRender.fillText("Mode: "+Object.keys(GameMode)[gameMode]+" Type: "+Object.keys(GameType)[gameType],xPos,yPos+=yStep);
 	
-	guiRender.fillText("shotSpeed: "+shotSpeed,xPos,scaledHeight-230);
-	guiRender.fillText("[1]noClip: "+noClip,xPos,scaledHeight-210);
-	guiRender.fillText("[2]noBounds: "+noBounds,xPos,scaledHeight-190);
-	guiRender.fillText("[3]noCollect: "+noCollect,xPos,scaledHeight-170);
-	guiRender.fillText("[4]noGrow: "+noGrow,xPos,scaledHeight-150);
-	guiRender.fillText("[5]noPile: "+noPile,xPos,scaledHeight-130);
-	guiRender.fillText("[6]noKnockback: "+noKnockback,xPos,scaledHeight-110);
-	guiRender.fillText("[7]collectCharge: "+collectCharge,xPos,scaledHeight-90);
-	guiRender.fillText("[8]instantCharge: "+instantCharge,xPos,scaledHeight-70);
-	guiRender.fillText("[9]wallJump: "+wallJump,xPos,scaledHeight-50);
-	guiRender.fillText("[0]infiniteJump: "+infiniteJump,xPos,scaledHeight-30);
-	guiRender.fillText("[J/L]stage-/+  [,]frameHold  [.]frameStep",xPos,scaledHeight-10);
-	guiRender.fillText("[N/M]pixelScale: "+pixelScale+"%("+pixelRatio+") [X]guiScale: "+guiScale.toFixed(4)+" [Z]smooth: "+imageSmooth+" [C]noClear: "+noClear+" [V]vsync: "+vsync,scaledWidth-4,40);
+	yPos = scaledHeight-270;
+	guiRender.fillText("[§]fixedCamera: "+fixedCamera,xPos,yPos+=yStep);
+	guiRender.fillText("[1]noClip: "+noClip,xPos,yPos+=yStep);
+	guiRender.fillText("[2]noBounds: "+noBounds,xPos,yPos+=yStep);
+	guiRender.fillText("[3]noCollect: "+noCollect,xPos,yPos+=yStep);
+	guiRender.fillText("[4]noGrow: "+noGrow,xPos,yPos+=yStep);
+	guiRender.fillText("[5]noPile: "+noPile,xPos,yPos+=yStep);
+	guiRender.fillText("[6]noKnockback: "+noKnockback,xPos,yPos+=yStep);
+	guiRender.fillText("[7]collectCharge: "+collectCharge,xPos,yPos+=yStep);
+	guiRender.fillText("[8]instantCharge: "+instantCharge,xPos,yPos+=yStep);
+	guiRender.fillText("[9]wallJump: "+wallJump,xPos,yPos+=yStep);
+	guiRender.fillText("[0]infiniteJump: "+infiniteJump,xPos,yPos+=yStep);
+	guiRender.fillText("[+/´]shotSpeed: "+shotSpeed,xPos,yPos+=yStep);
+	guiRender.fillText("[G/H]stage: "+levelIndex+"  [,]frameHold  [.]frameStep",xPos,yPos+=yStep);
 	
 	PerfInfo.Update(TimeNow());
 	guiRender.fillText(1*screenWidth.toFixed(4)+"x"+1*screenHeight.toFixed(4)+" | "+PerfInfo.frameInfo+" | "+PerfInfo.fpsInfo,scaledWidth-5,20);
@@ -4589,9 +4591,11 @@ function LoadingScreen(){
 	guiRender.textAlign = "left";
 	guiRender.fillText("Version "+version,3,scaledHeight-3);
 	
-	guiRender.fillText("- F or F4 to enable fullscreen",3,20);
-	guiRender.fillText("- Drop an image file into the game to set it as the background",3,45);
-	guiRender.fillText("- Add stages by dropping images at stage selection",3,70);
+	let xPos=3, yPos=20, yStep=28;
+	guiRender.fillText("- Drop an image file into the game to set it as the background",xPos,yPos);
+	guiRender.fillText("- Add stages by dropping images at stage selection",xPos,yPos+=yStep);
+	guiRender.fillText("- [ScrollLock] to enable DebugMode",xPos,yPos+=yStep);
+	guiRender.fillText("- [F] or [F4] to enable fullscreen",xPos,yPos+=yStep);
 	
 	if(loadingDone){
 		guiRender.fillStyle = "#000000";
