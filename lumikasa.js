@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2022)
-const version = "0x4BF";
+const version = "0x4C3";
 
 function TimeNow(){
 	//return Date.now();
@@ -19,7 +19,7 @@ let animForce = 0.025, menuAnimThreshold = 0.25;
 
 let menuBgColor = "#000000DD", menuBorderColor = "#00AAAA", menuTextColor = "#FFFF00", menuTextFadeColor = "#777700", menuTitleColor = "#FFFFFF";
 let optionBgColor = "#000000DD", optionBorderColor = "#00AAAA", optionTextColor = "#00AAAA", optionFadeColor = "#005555";
-let optionBgHighlightColor = "#000000DD", optionBorderHighlightColor = "#FFFFFF", optionTextHighlightColor = "#FFFFFF";
+let optionBgHighlightColor = "#008888DD", optionBorderHighlightColor = "#FFFFFF", optionTextHighlightColor = "#FFFFFF";
 let plainTextColor = "#FFFFFF", playerTextColor = "#000000";
 let PlayerColors = [null,
 {color:"#0000FF", fadeColor:"#000077", bgColor:"#CCCCFF", bgFadeColor:"#666677"}, //player1
@@ -225,6 +225,7 @@ for(let i = 0; i <= 4; i++){
 		colRadius:0,
 		colTop:0,
 		confirmKey:false,
+		directionInputTime:0,
 		down:false,
 		downValue:0,
 		inputMethod:-1,
@@ -263,12 +264,12 @@ for(let i = 0; i <= 4; i++){
 		up:false,
 		upValue:0
 		});
-
+		
 		Players[i].canvas = document.createElement('canvas');
 		Players[i].canvas.height = 0;
 		Players[i].canvas.width = 0;
 		Players[i].render = Players[i].canvas.getContext('2d');
-
+		
 		Players[i].copyCanvas = document.createElement('canvas');
 		Players[i].copyCanvas.height = 0;
 		Players[i].copyCanvas.width = 0;
@@ -314,6 +315,7 @@ let Input = {
 	aimYneg:12,
 	aimYpos:13
 };
+let guiNavInputs = [];
 let defaultKeyboard = [
 	{name:["ArrowUp","W"], input:["ArrowUp","KeyW"], deadzone:0},
 	{name:["ArrowDown","S"], input:["ArrowDown","KeyS"], deadzone:0},
@@ -329,7 +331,7 @@ let defaultKeyboard = [
 	{name:["+MouseX"], input:["+mX"], deadzone:0},
 	{name:["-MouseY"], input:["-mY"], deadzone:0},
 	{name:["+MouseY"], input:["+mY"], deadzone:0}];
-let defaultGamepad = [ //button/axis,id,deadzone
+let defaultGamepad = [
 	{name:["-Axis(1)","Joy(12)"], input:["-a1",12], deadzone:0.25},
 	{name:["+Axis(1)","Joy(13)"], input:["+a1",13], deadzone:0.25},
 	{name:["-Axis(0)","Joy(14)"], input:["-a0",14], deadzone:0.25},
@@ -345,12 +347,12 @@ let defaultGamepad = [ //button/axis,id,deadzone
 	{name:["-Axis(3)"], input:["-a3"], deadzone:0.2},
 	{name:["+Axis(3)"], input:["+a3"], deadzone:0.2}];
 let KeyBindings = []; //upKey,downKey,leftKey,rightKey,jumpKey,chargeKey,chargeHoldKey,confirmKey,cancelKey,pauseKey,-AimX,+AimX,-AimY,+AimY
-function GetDefaultBindings(defaulBindings){
+function GetDefaultBindings(defaultBindings){
 	let bindings = [];
-
-	for(let key = 0; key < defaulBindings.length; key++)
-		bindings.push({name:defaulBindings[key].name, input:defaulBindings[key].input, deadzone:defaulBindings[key].deadzone, value:new Array(defaulBindings[key].input.length).fill(0), blocked:new Array(defaulBindings[key].input.length).fill(false)});
-
+	
+	for(let key = 0; key < defaultBindings.length; key++)
+		bindings.push({name:defaultBindings[key].name.slice(), input:defaultBindings[key].input.slice(), deadzone:defaultBindings[key].deadzone, value:new Array(defaultBindings[key].input.length).fill(0), blocked:new Array(defaultBindings[key].input.length).fill(false)});
+	
 	return bindings;
 }
 function SetKeyBinding(playerNum, inputType, name, input){
@@ -365,7 +367,6 @@ function SetKeyBinding(playerNum, inputType, name, input){
 		KeyBind.input.push(input);
 		KeyBind.value.push(0);
 	}
-	
 	if(Players[playerNum].inputMethod>0){ //not keyboard&mouse
 		for(let key = 0; key < KeyBindings[playerNum].length; key++)
 			KeyBindings[playerNum][key].blocked = new Array(KeyBindings[playerNum][key].input.length).fill(true); //prevents immediate input after keybind
@@ -380,13 +381,6 @@ function ResetKeyValues(){ //for save loading
 	}
 }
 
-KeyBindings[0] = GetDefaultBindings(defaultKeyboard); //player0
-
-KeyBindings[1] = GetDefaultBindings(defaultKeyboard); //player1
-KeyBindings[2] = GetDefaultBindings(defaultGamepad); //player2
-KeyBindings[3] = GetDefaultBindings(defaultGamepad); //player3
-KeyBindings[4] = GetDefaultBindings(defaultGamepad); //player4
-
 let deadzoneSliderWidth = 5, deadzoneTargetWidth = 5, deadzoneSliderSmall = 5, deadzoneSliderLarge = 15;
 let keyBinding = false;
 let resetBinding = false;
@@ -397,11 +391,17 @@ let activePlayer = 1;
 let gamepads;
 let gamepadTemp = null;
 let InputMethods = [
-{id:"Keyboard&Mouse", index:-1, player:0}
+{id:"Keyboard&Mouse", index:-1, players:[1]}
 ];
+Players[1].inputMethod = 0;
+Players[1].inputInfo = {id:InputMethods[0].id, index:InputMethods[0].index};
+KeyBindings[0] = GetDefaultBindings(defaultKeyboard); //player0
+KeyBindings[1] = GetDefaultBindings(defaultKeyboard); //player1
+KeyBindings[2] = GetDefaultBindings(defaultGamepad); //player2
+KeyBindings[3] = GetDefaultBindings(defaultGamepad); //player3
+KeyBindings[4] = GetDefaultBindings(defaultGamepad); //player4
 
-let directionInputTime = TimeNow();
-let directionInputRepeatInterval = 500; //ms
+let directionInputRepeatDelay = 500; //ms
 
 //System (+Debug) variables
 let pause = true;
@@ -547,25 +547,25 @@ function ScreenSize(){ //Initialize game screen and update middlePoint (if scree
 	
 	gameCanvas.width = guiCanvas.width = screenWidth;
 	gameCanvas.height = guiCanvas.height = screenHeight;
-
+	
 	if(guiScaleOn){
 		guiScale = Math.min(screenWidth/1280,screenHeight/720);
-
+		
 		/*if(guiScale>=1)
 			guiScale = Math.floor(guiScale);*/ //integer scale for menus if resolution is high enough
-
+		
 		guiRender.scale(guiScale,guiScale);
 	} else
 		guiScale = 1;
 	
 	gameRender.imageSmoothingEnabled = guiRender.imageSmoothingEnabled = imageSmooth;
-
+	
 	scaledWidth = screenWidth/guiScale;
 	scaledHeight = screenHeight/guiScale;
-
+	
 	scaledWidthHalf = Math.floor(scaledWidth/2);
 	scaledHeightHalf = Math.floor(scaledHeight/2);
-
+	
 	middlePointX = screenWidth/2;
 	middlePointY = screenHeight/2;
 }
@@ -613,15 +613,14 @@ function DirectionalKey(player, inputType, state, value){
 		player.rightValue = value;
 	}
 	
-	if(loadingScreen || playerConfirm || activeMenu===null || !state)
+	if(playerConfirm || activeMenu===null || !state)
 		return;
 	
 	if(!oldState)
-		directionInputTime = TimeNow();
-	else if(TimeNow()-directionInputTime < directionInputRepeatInterval)
+		player.directionInputTime = TimeNow();
+	else if(TimeNow()-player.directionInputTime < directionInputRepeatDelay)
 		return;
-	
-	NavigateGUI(inputType);
+	PushGuiNavInput(inputType);
 } function JumpKey(player, state){
 	if(state){
 		if(player.newJump){
@@ -650,30 +649,21 @@ function DirectionalKey(player, inputType, state, value){
 					firstJoined = player.number;
 				PlaySound(Sounds.confirm);
 			}
-		} else if(!loadingScreen && activeMenu!==null){
-			optionSelected = true;
-			PlaySound((selectedOption===cancel || selectedOption.cancel) ? Sounds.cancel : Sounds.confirm); //"selectedOption===cancel" is probably pointless here
-		}
+		} else if(activeMenu!==null)
+			PushGuiNavInput(Input.confirm);
 	}
 	player.confirmKey = state;
 } function CancelKey(player, state){
-	if(!player.cancelKey && state)
-	if((!loadingScreen && activeSubmenu!==null) || activeMenu===GUI.pause){
-		optionSelected = true;
-		selectedOption = cancel;
-		PlaySound(Sounds.cancel);
+	if(!player.cancelKey && state){
+		if(activeSubmenu!==null || activeMenu===GUI.pause)
+			PushGuiNavInput(Input.cancel);
 	}
 	player.cancelKey = state;
 } function PauseKey(player, state){
 	if(!player.pauseKey && state){
 		if(gameStarted && !pause)
 			Pause();
-		else if(activeMenu===GUI.pause){
-			optionSelected = true;
-			selectedOption = cancel;
-			if(activeSubmenu!==null)
-				PlaySound(Sounds.cancel);
-		} else if(playerConfirm){
+		else if(playerConfirm){
 			if(player.number===firstJoined && player.joined)
 				ConfirmPlayers();
 		}
@@ -687,7 +677,7 @@ function DirectionalKey(player, inputType, state, value){
 	}
 	//Update AimX/Y
 	let mouseXaim = false, mouseYaim = false;
-	if(player.number===InputMethods[0].player){ //keyboard&mouse
+	if(InputMethods[0].players.includes(player.number)){ //keyboard&mouse
 		let Bind = KeyBindings[player.number];
 		//checking if mouseAxis is assigned to aimAxes
 		for(let type = Input.aimXneg; type <= Input.aimXpos; type++)
@@ -760,27 +750,30 @@ function SetInput(inputType,inputState,player,value){
 			Aim(player,null,0);
 	}
 }
-function InputUpdate(input,playerNum,value){
+function InputUpdate(input,players,value){
 	let validInput = false;
-	let KeyBind = KeyBindings[playerNum];
-	for(let k = 0; k < KeyBind.length; k++){
-		for(let i = 0; i < KeyBind[k].input.length; i++){
-			if(input === KeyBind[k].input[i]){
-				validInput = true;
-				
-				let prevValue = KeyBind[k].value[i];
-				KeyBind[k].value[i] = Math.abs(value);
-				
-				if(!keyBinding && KeyBind[k].value[i] > KeyBind[k].deadzone){ //InputDown
-					if(mouseDrag || optionSelected || menuAnimating || KeyBind[k].blocked[i])
-						continue;
+	for(let pl = 0; pl < players.length; pl++){
+		let playerNum = players[pl];
+		let KeyBind = KeyBindings[playerNum];
+		for(let k = 0; k < KeyBind.length; k++){
+			for(let i = 0; i < KeyBind[k].input.length; i++){
+				if(input === KeyBind[k].input[i]){
+					validInput = true;
 					
-					SetInput(k,true,Players[playerNum],(KeyBind[k].value[i]-KeyBind[k].deadzone)/(1-KeyBind[k].deadzone)); //last parameter used to be just KeyBind[k].value[i]
+					let prevValue = KeyBind[k].value[i];
+					KeyBind[k].value[i] = Math.abs(value);
 					
-				} else if(KeyBind[k].value[i] <= KeyBind[k].deadzone){ //InputUp (KeyBind[k].value[i] < KeyBind[k].deadzone || KeyBind[k].value[i]===0???)
-					KeyBind[k].blocked[i] = false;
-					if(prevValue > KeyBind[k].deadzone)
-						SetInput(k,false,Players[playerNum],KeyBind[k].value[i]);
+					if(KeyBind[k].value[i] > KeyBind[k].deadzone){ //InputDown
+						if(KeyBind[k].blocked[i])
+							continue;
+						
+						SetInput(k,true,Players[playerNum],(KeyBind[k].value[i]-KeyBind[k].deadzone)/(1-KeyBind[k].deadzone)); //last parameter used to be just KeyBind[k].value[i]
+						
+					} else if(KeyBind[k].value[i] <= KeyBind[k].deadzone){ //InputUp (KeyBind[k].value[i] < KeyBind[k].deadzone || KeyBind[k].value[i]===0???)
+						KeyBind[k].blocked[i] = false;
+						if(prevValue > KeyBind[k].deadzone)
+							SetInput(k,false,Players[playerNum],KeyBind[k].value[i]);
+					}
 				}
 			}
 		}
@@ -804,7 +797,7 @@ document.addEventListener('keydown', function(event){
 	}
 	else if(loadingScreen && loadingDone && event.code === "Enter")
 		loadingScreen = false;
-	else if(InputUpdate(event.code,InputMethods[0].player,1))
+	else if(InputUpdate(event.code,InputMethods[0].players,1))
 		event.preventDefault();
 	else {
 		if(event.code === "Escape" && document.fullscreenElement)
@@ -824,7 +817,7 @@ document.addEventListener('keydown', function(event){
 	}
 });
 document.addEventListener('keyup', function(event){
-	InputUpdate(event.code,InputMethods[0].player,0);
+	InputUpdate(event.code,InputMethods[0].players,0);
 });
 gameCanvas.addEventListener('mousedown', function(event){
 	UpdateMousePos(event.clientX-this.offsetLeft,event.clientY-this.offsetTop);
@@ -834,20 +827,19 @@ gameCanvas.addEventListener('mousedown', function(event){
 			StopKeyBinding();
 		}
 	} else if(!loadingScreen && activeMenu!==null){
-		if(CheckMouse(true)){
-			optionSelected = true;
-			PlaySound((selectedOption===cancel || selectedOption.cancel) ? Sounds.cancel : Sounds.confirm);
-		} else if(activeSubmenu===null)
+		if(CheckMouse(true))
+			PushGuiNavInput(Input.confirm);
+		else if(activeSubmenu===null)
 			mouseDraw=event.button;
 		else
-			InputUpdate("m"+event.button,InputMethods[0].player,1);
+			InputUpdate("m"+event.button,InputMethods[0].players,1);
 	} else
-		InputUpdate("m"+event.button,InputMethods[0].player,1);
+		InputUpdate("m"+event.button,InputMethods[0].players,1);
 	
 	event.preventDefault();
 });
 document.addEventListener('mouseup', function(event){
-	InputUpdate("m"+event.button,InputMethods[0].player,0);
+	InputUpdate("m"+event.button,InputMethods[0].players,0);
 	mouseDraw=-1;
 	mouseDrag=false;
 });
@@ -879,11 +871,10 @@ gameCanvas.addEventListener('mousemove', function(event){
 		//if(previousOption !== selectedOption)
 			//PlaySound(Sounds.select);
 	}
-	InputUpdate("-mX",InputMethods[0].player,Math.min(mouseAxisX,0));
-	InputUpdate("+mX",InputMethods[0].player,Math.max(mouseAxisX,0));
-
-	InputUpdate("-mY",InputMethods[0].player,Math.min(mouseAxisY,0));
-	InputUpdate("+mY",InputMethods[0].player,Math.max(mouseAxisY,0));
+	InputUpdate("-mX",InputMethods[0].players,Math.min(mouseAxisX,0));
+	InputUpdate("+mX",InputMethods[0].players,Math.max(mouseAxisX,0));
+	InputUpdate("-mY",InputMethods[0].players,Math.min(mouseAxisY,0));
+	InputUpdate("+mY",InputMethods[0].players,Math.max(mouseAxisY,0));
 });
 let scrollBuffer = 0;
 gameCanvas.addEventListener('wheel', function(event){
@@ -939,14 +930,13 @@ gameCanvas.addEventListener('wheel', function(event){
 	scrollAxisX = Clamp(scrollAxisX+event.deltaX/100, -1, 1);
 	scrollAxisY = Clamp(scrollAxisY+event.deltaY/100, -1, 1);
 	
-	if(InputUpdate("-sX",InputMethods[0].player,Math.min(scrollAxisX,0)))
+	if(InputUpdate("-sX",InputMethods[0].players,Math.min(scrollAxisX,0)))
 		event.preventDefault();
-	if(InputUpdate("+sX",InputMethods[0].player,Math.max(scrollAxisX,0)))
+	if(InputUpdate("+sX",InputMethods[0].players,Math.max(scrollAxisX,0)))
 		event.preventDefault();
-	
-	if(InputUpdate("-sY",InputMethods[0].player,Math.min(scrollAxisY,0)))
+	if(InputUpdate("-sY",InputMethods[0].players,Math.min(scrollAxisY,0)))
 		event.preventDefault();
-	if(InputUpdate("+sY",InputMethods[0].player,Math.max(scrollAxisY,0)))
+	if(InputUpdate("+sY",InputMethods[0].players,Math.max(scrollAxisY,0)))
 		event.preventDefault();
 });
 gameCanvas.addEventListener('drop', function(event){
@@ -983,7 +973,7 @@ gameCanvas.addEventListener('dragover', function(event){
 	event.preventDefault();
 });
 gameCanvas.addEventListener('contextmenu', function(event){
-	if(InputMethods[0].player>0) //if some player uses keyboard&mouse
+	if(!InputMethods[0].players.includes(0)) //if some player uses keyboard&mouse
 		event.preventDefault();
 });
 gameCanvas.addEventListener('click', function(event){
@@ -1004,49 +994,34 @@ window.addEventListener('resize', function(event){
 	ScreenSize();
 });
 /*window.addEventListener('gamepadconnected', function(event){
-	UpdateInputMethods(true);
+	UpdateInputMethods();
 });
 window.addEventListener('gamepaddisconnected', function(event){
-	UpdateInputMethods(true);
+	UpdateInputMethods();
 });*/
-function UpdateInputMethods(idCompare){
+function UpdateInputMethods(){
 	gamepads = navigator.getGamepads();
 	
 	for(let pl = 1; pl < Players.length; pl++)
 		Players[pl].inputMethod = -1;
 	
 	InputMethods.splice(1);
-	InputMethods[0].player = 0;
+	InputMethods[0].players = [];
 	for(let gp = 0; gp < gamepads.length; gp++){
 		if(gamepads[gp] !== null && gamepads[gp].connected)
-			InputMethods.push({id:gamepads[gp].id, index:gamepads[gp].index, player:0});
+			InputMethods.push({id:gamepads[gp].id, index:gamepads[gp].index, players:[]});
 	}
-
 	for(let im = 0; im < InputMethods.length; im++){
-		let inputMethodHasNoPlayer = true;
 		for(let pl = 1; pl < Players.length; pl++){
-			if(Players[pl].inputMethod === -1) //if player has no inputMethod assigned yet
-			if((idCompare && Players[pl].inputInfo.id === InputMethods[im].id) || (!idCompare && Players[pl].inputInfo.index === InputMethods[im].index)){
-				InputMethods[im].player = pl;
+			if(Players[pl].inputMethod === -1)
+			if(Players[pl].inputInfo.id === InputMethods[im].id && Players[pl].inputInfo.index === InputMethods[im].index){
+				InputMethods[im].players.push(pl);
 				Players[pl].inputMethod = im;
-				Players[pl].inputInfo = {id:InputMethods[im].id, index:InputMethods[im].index};
-				
-				inputMethodHasNoPlayer = false;
-				break;
-			}
-		}
-		if(inputMethodHasNoPlayer)
-		for(let pl = 1; pl < Players.length; pl++){
-			if(Players[pl].inputInfo.id === ""){ //if player still has no inputMethod assigned
-				InputMethods[im].player = pl;
-				Players[pl].inputMethod = im;
-				Players[pl].inputInfo = {id:InputMethods[im].id, index:InputMethods[im].index};
-				
-				KeyBindings[pl] = GetDefaultBindings((im===0) ? defaultKeyboard : defaultGamepad);
-				break;
 			}
 		}
 	}
+	if(InputMethods[0].players.length===0)
+		InputMethods[0].players = [0];
 	UpdateInputMethodMenu();
 }
 function CheckGamepads(){
@@ -1059,11 +1034,29 @@ function CheckGamepads(){
 	if(gamepads.length-emptyGamepads !== InputMethods.length-1){
 		if(keyBinding)
 			StopKeyBinding();
-		UpdateInputMethods(true);
+		UpdateInputMethods();
 	}
 	
 	if(InputMethods.length<=1) //if keyboard&mouse is the only inputMethod
 		return;
+	
+	for(let im = 1; im < InputMethods.length; im++){
+		let gp = InputMethods[im].index;
+		
+		if(gamepads[gp] === null) //failsafe if gamepad disconnects during a session (Add !gamepads[gp].connected if gamepads[gp] is not null?)
+			continue;
+		
+		for(let b = 0; b < gamepads[gp].buttons.length; b++)
+			InputUpdate(b,InputMethods[im].players,gamepads[gp].buttons[b].value);
+		
+		for(let a = 0; a < gamepads[gp].axes.length; a++){
+			let axisCode = Math.sign(gamepads[gp].axes[a])===1 ? "+a"+a : "-a"+a;
+			let inverseAxisCode = Math.sign(gamepads[gp].axes[a])===1 ? "-a"+a : "+a"+a;
+			
+			InputUpdate(axisCode,InputMethods[im].players,gamepads[gp].axes[a]);
+			InputUpdate(inverseAxisCode,InputMethods[im].players,0);
+		}
+	}
 	
 	if(keyBinding){
 		if(Players[activePlayer].inputMethod < 1)
@@ -1103,26 +1096,6 @@ function CheckGamepads(){
 				StopKeyBinding();
 				return;
 			}
-		}
-	}
-	for(let pl = 1; pl < Players.length; pl++){ //used to be: im = 1; im < InputMethods.length; im++ directly
-		if(Players[pl].inputMethod < 1)
-			continue;
-		
-		let gp = InputMethods[Players[pl].inputMethod].index; //or Players[pl].inputInfo.index
-		
-		if(gamepads[gp] === null) //failsafe if gamepad disconnects during a session (Add !gamepads[gp].connected if gamepads[gp] is not null?)
-			continue;
-		
-		for(let b = 0; b < gamepads[gp].buttons.length; b++)
-			InputUpdate(b,pl,gamepads[gp].buttons[b].value);
-		
-		for(let a = 0; a < gamepads[gp].axes.length; a++){
-			let axisCode = Math.sign(gamepads[gp].axes[a])===1 ? "+a"+a : "-a"+a;
-			let inverseAxisCode = Math.sign(gamepads[gp].axes[a])===1 ? "-a"+a : "+a"+a;
-			
-			InputUpdate(axisCode,pl,gamepads[gp].axes[a]);
-			InputUpdate(inverseAxisCode,pl,0);
 		}
 	}
 }
@@ -1252,7 +1225,7 @@ function InitializeGame(level){
 		fixedCamera = false;
 		noPile = false;
 	}
-
+	
 	IngamePlayers = [];
 	for(let ap = 0; ap < Players.length; ap++){
 		if(Players[ap].joined)
@@ -1260,7 +1233,7 @@ function InitializeGame(level){
 	}
 	
 	LoadLevel(level);
-
+	
 	pause = false;
 	gameStarted = true;
 	lastTime = TimeNow(); //adds a little delay when the game starts
@@ -1285,10 +1258,10 @@ function InitializePlayer(player,newGame){
 	player.rotMomentum = 0;
 	player.jumpTimer = 0;
 	player.onGround = false;
-
+	
 	player.playerWidth = 32;
 	player.playerHeight = 32;
-
+	
 	player.canvas.height = player.playerHeight;
 	player.canvas.width = player.playerWidth;
 	player.render = player.canvas.getContext('2d');
@@ -1342,13 +1315,13 @@ function ChangeSize(change, player){
 	player.canvas.width = player.playerWidth;
 	
 	player.playerRadius = player.playerHeight/2;
-
+	
 	player.render.beginPath();
 	player.render.arc(player.playerRadius,player.playerRadius,player.playerRadius-1,0,2*Math.PI); //circle clipping area
 	player.render.clip();
-
+	
 	player.render.drawImage(tempCanvas, change, change);
-
+	
 	player.playerPosX-=change;
 	player.playerPosY-=change;
 	
@@ -1396,7 +1369,7 @@ function CreateShot(player){
 			Ydirection:0
 		})-1
 	];
-
+	
 	newBall.canvas = document.createElement('canvas');
 	newBall.canvas.width = 1;
 	newBall.canvas.height = 1;
@@ -1421,7 +1394,7 @@ function ChargeShot(change, ball){
 	}
 	ball.hitLimit+=2*change;
 	ball.ballSize+=2*change;
-
+	
 	ball.canvas.height = ball.ballSize;
 	ball.canvas.width = ball.ballSize;
 	
@@ -1592,12 +1565,14 @@ function BallBallCollision(ball1,ball2){
 	if(!CircleOverlap(ball2X-ballX, ball2Y-ballY, ball2.ballRadius+ball1.ballRadius+1))
 		return;
 	for(let v = 0; v < ball1.Vectors.length; v++){
-		let ballVector = ball1.Vectors[v];
+		let ballVector1 = ball1.Vectors[v];
+		if(ballVector1.length===0) //if empty ballVector has not been removed yet
+			continue;
 		if(ball2.isMoving){
 			for(let v2 = 0; v2 < ball2.Vectors.length; v2++){
 				let ballVector2 = ball2.Vectors[v2];
 				
-				let bX1 = ballVector[0].x, bX2 = ballVector[ballVector.length-1].x;
+				let bX1 = ballVector1[0].x, bX2 = ballVector1[ballVector1.length-1].x;
 				let b2X1 = ballVector2[0].x, b2X2 = ballVector2[ballVector2.length-1].x;
 				let bXmin = Math.min(bX1,bX2)+ball1.ballPosX;
 				let bXmax = Math.max(bX1,bX2)+ball1.ballPosX;
@@ -1605,7 +1580,7 @@ function BallBallCollision(ball1,ball2){
 				let b2Xmax = Math.max(b2X1,b2X2)+ball2.ballPosX;
 				let xOverlap = (bXmin <= b2Xmax) && (b2Xmin <= bXmax);
 				
-				let bY1 = ballVector[0].y, bY2 = ballVector[ballVector.length-1].y;
+				let bY1 = ballVector1[0].y, bY2 = ballVector1[ballVector1.length-1].y;
 				let b2Y1 = ballVector2[0].y, b2Y2 = ballVector2[ballVector2.length-1].y;
 				let bYmin = Math.min(bY1,bY2)+ball1.ballPosY;
 				let bYmax = Math.max(bY1,bY2)+ball1.ballPosY;
@@ -1614,8 +1589,8 @@ function BallBallCollision(ball1,ball2){
 				let yOverlap = (bYmin <= b2Ymax) && (b2Ymin <= bYmax);
 				
 				if(xOverlap && yOverlap){ //vector-vector (line-line) collision
-					while(ballVector.length > 0){
-						let levelInfo = UpdateLevelData(ball1.level,ballLevelX+ballVector[0].x,ballLevelY+ballVector[0].y);
+					while(ballVector1.length > 0){
+						let levelInfo = UpdateLevelData(ball1.level,ballLevelX+ballVector1[0].x,ballLevelY+ballVector1[0].y);
 						ball1.level = levelInfo.level;
 						let levelX = levelInfo.levelX;
 						let levelY = levelInfo.levelY;
@@ -1628,17 +1603,17 @@ function BallBallCollision(ball1,ball2){
 							SetClipPixel(terrain, levelX, levelY, ball1.level);
 						}
 						
-						SetClipPixel(ball1, ballVector[0].x, ballVector[0].y);
+						SetClipPixel(ball1, ballVector1[0].x, ballVector1[0].y);
 						
-						ballVector.splice(0,1); //removing empty block
+						ballVector1.splice(0,1); //removing empty block
 					}
 					break;
 				}
 			}
 		} else { //ball-shield
-			for(let i = 0; i < ballVector.length; i+=updateInterval){
-				let ballBlockY = ball1.ballPosY+ballVector[i].y;
-				let ballBlockX = ball1.ballPosX+ballVector[i].x;
+			for(let i = 0; i < ballVector1.length; i+=updateInterval){
+				let ballBlockY = ball1.ballPosY+ballVector1[i].y;
+				let ballBlockX = ball1.ballPosX+ballVector1[i].x;
 				if(CircleOverlap(ball2X-ballBlockX, ball2Y-ballBlockY, ball2.ballRadius)){
 					ball2.hitCount+=1;
 					if(ball2.hitCount>=ball2.hitLimit){
@@ -1649,9 +1624,9 @@ function BallBallCollision(ball1,ball2){
 						ball2.hitCount=0;
 					}
 					
-					SetClipPixel(ball1, ballVector[i].x, ballVector[i].y);
+					SetClipPixel(ball1, ballVector1[i].x, ballVector1[i].y);
 					
-					ballVector.splice(i,1); //removing empty block
+					ballVector1.splice(i,1); //removing empty block
 					i-=updateInterval;
 				}
 			}
@@ -1895,7 +1870,7 @@ function GameLogic(){
 for(let step = steps; step >= 1; step--){
 	for(let p = 0; p < IngamePlayers.length; p++){
 		let player = IngamePlayers[p];
-
+		
 		if(player.left){
 			if(noClip)
 				player.playerPosX -= maxSpeed*player.leftValue;
@@ -1945,7 +1920,7 @@ for(let step = steps; step >= 1; step--){
 			if(player.sizeLevel>0 && !player.chargeHold){
 				if(ball === null || ball.isMoving)
 					ball = CreateShot(player);
-
+				
 				if(instantCharge){
 					ChargeShot(player.sizeLevel/2, ball);
 					ChangeSize(-player.sizeLevel/2, player);
@@ -2059,7 +2034,7 @@ for(let step = steps; step >= 1; step--){
 				continue;
 			
 			terrain.ResetCollided();
-
+			
 			let prevBallPosX = ball.ballPosX;
 			let prevBallPosY = ball.ballPosY;
 			
@@ -2073,17 +2048,13 @@ for(let step = steps; step >= 1; step--){
 			ballX = ball.ballPosX+ball.ballRadius;
 			ballLevelY = Math.floor(ball.ballPosY-levelPosY);
 			ballLevelX = Math.floor(ball.ballPosX-levelPosX);
-
+			
 			ball.collided = false;
 			
 			for(let op = 0; op < IngamePlayers.length; op++){
 				let otherPlayer = IngamePlayers[op];
 				if(otherPlayer.number===player.number)
 					continue;
-				
-				if(!noPile)
-					for(let b2 = 0; b2 < otherPlayer.Balls.length; b2++)
-						BallBallCollision(ball,otherPlayer.Balls[b2]);
 				
 				if(BallPlayerCollision(ball,otherPlayer)){ //if GameOver or player dies
 					if(gameType===GameType.score){
@@ -2097,6 +2068,9 @@ for(let step = steps; step >= 1; step--){
 						return;
 					}
 				}
+				if(!noPile)
+					for(let b2 = 0; b2 < otherPlayer.Balls.length; b2++)
+						BallBallCollision(ball,otherPlayer.Balls[b2]);
 			}
 			
 			BallTerrainCollision(ball,ballPosDiff);
@@ -2170,7 +2144,7 @@ for(let step = steps; step >= 1; step--){
 		let minX=0,minY=0,maxX=0,maxY=0;
 		for(let p = 0; p < IngamePlayers.length; p++){ //finding the middlepoint between players
 			let player = IngamePlayers[p];
-
+			
 			if(p===0){
 				minX = player.playerPosX;
 				maxX = player.playerPosX+player.playerWidth;
@@ -2193,7 +2167,7 @@ for(let step = steps; step >= 1; step--){
 		let newAreaScale1 = (screenWidth*aimMargin)/(maxX-minX);
 		let newAreaScale2 = (screenHeight*aimMargin)/(maxY-minY);
 		areaScale = Math.min(areaScale,newAreaScale1,newAreaScale2);
-
+		
 		let playersCenterX = (minX+maxX)/2;
 		let playersCenterY = (minY+maxY)/2;
 		
@@ -2224,7 +2198,7 @@ for(let step = steps; step >= 1; step--){
 		for(let p = 1; p < Players.length; p++){
 			if(!Players[p].joined)
 				continue;
-
+			
 			for(let b = 0; b < Players[p].Balls.length; b++){
 				Players[p].Balls[b].ballPosX += xPositionChange;
 				Players[p].Balls[b].ballPosY += yPositionChange;
@@ -2235,7 +2209,7 @@ for(let step = steps; step >= 1; step--){
 	}
 	for(let p = 0; p < IngamePlayers.length; p++){
 		let player = IngamePlayers[p];
-
+		
 		Aim(player); //update AimX/Y
 		if(player.Balls.length > 0){
 			let ball = player.Balls[player.Balls.length-1];
@@ -2274,7 +2248,7 @@ for(let step = steps; step >= 1; step--){
 	}
 	for(let p = 0; p < IngamePlayers.length; p++){
 		let player = IngamePlayers[p];
-
+		
 		if(player.invulnerability > 0)
 			gameRender.globalAlpha = 0.5;
 		gameRender.drawImage(player.canvas,0,0,player.playerWidth,player.playerHeight,player.playerPosX*areaScale,player.playerPosY*areaScale,player.playerWidth*areaScale,player.playerHeight*areaScale);
@@ -2298,7 +2272,7 @@ for(let step = steps; step >= 1; step--){
 	gameRender.setLineDash([5*guiScale,10*guiScale]);
 	for(let p = 0; p < IngamePlayers.length; p++){
 		let player = IngamePlayers[p];
-
+		
 		if(!player.aimCentered){
 			gameRender.beginPath();
 			gameRender.moveTo((player.playerPosX+player.playerRadius)*areaScale,(player.playerPosY+player.playerRadius)*areaScale);
@@ -2314,7 +2288,7 @@ for(let step = steps; step >= 1; step--){
 	if(gameMode===GameMode.battle){
 		for(let p = 0; p < IngamePlayers.length; p++){
 			let player = IngamePlayers[p];
-
+			
 			if(player.statusVisibility > 0){
 				gameRender.fillStyle=PlayerColors[player.number].color;
 				gameRender.font=Math.max(player.playerHeight*areaScale,30)+"px Arial";
@@ -3148,28 +3122,23 @@ function AddStageButton(stageIndex,stageWidth,stageHeight){
 function UpdateInputMethodMenu(){
 	let inputDropdown = GUI.options.dropdown[0];
 	inputDropdown.item = [];
-	inputDropdown.targetWidth = inputDropdown.orgWidth;
 	inputDropdown.borderColor = PlayerColors[activePlayer].color;
-	inputDropdown.bgHighlightColor = PlayerColors[activePlayer].fadeColor;
+	inputDropdown.targetWidth = inputDropdown.orgWidth;
 	
+	guiRender.font = inputDropdown.pFontSize+"px Arial";
 	for(let method = 0; method < InputMethods.length; method++){
+		inputDropdown.targetWidth = Math.max(inputDropdown.targetWidth, Math.floor(guiRender.measureText(InputMethods[method].id).width));
 		inputDropdown.item.push({data:null,pText:InputMethods[method].id});
 		AddDefaultProperties(inputDropdown.item[method],"item",inputDropdown,GUI.options);
 		inputDropdown.item[method].bgHighlightColor = PlayerColors[activePlayer].fadeColor;
-		
-		if(InputMethods[method].player>0)
-			inputDropdown.item[method].borderColor = PlayerColors[InputMethods[method].player].color;
-		
-		guiRender.font=inputDropdown.pFontSize+"px Arial";
-		inputDropdown.targetWidth = Math.max(inputDropdown.targetWidth, Math.floor(guiRender.measureText(InputMethods[method].id).width));
 	}
-	if(Players[activePlayer].inputMethod===-1){ //activePlayer has no inputMethod
-		inputDropdown.item.push({data:null,pText:""});
-		AddDefaultProperties(inputDropdown.item[inputDropdown.item.length-1],"item",inputDropdown,GUI.options);
-		inputDropdown.item[inputDropdown.item.length-1].bgHighlightColor = PlayerColors[activePlayer].fadeColor;
-		
+	inputDropdown.item.push({data:null,pText:"No input"});
+	AddDefaultProperties(inputDropdown.item[inputDropdown.item.length-1],"item",inputDropdown,GUI.options);
+	inputDropdown.item[inputDropdown.item.length-1].bgHighlightColor = PlayerColors[activePlayer].fadeColor;
+	
+	if(Players[activePlayer].inputMethod===-1) //activePlayer has no inputMethod
 		inputDropdown.activeItem = inputDropdown.item.length-1;
-	} else
+	else
 		inputDropdown.activeItem = Players[activePlayer].inputMethod;
 	
 	inputDropdown.selectedItem = inputDropdown.activeItem;
@@ -3185,12 +3154,12 @@ function GetClosestOption(direction,option){
 	let menuGUI = CurrentMenu();
 	let guiElement = option;
 	let guiParent = guiElement.parent;
-
+	
 	let siblingFound = false;
 	let minDistance = Infinity;
 	let maxOverlap = 0; //decreasing this initial value makes menu navigation less strict
 	let overlapThreshold = 0.5; //percentage of length overlap required if a closer gui-element is found
-
+	
 	let guiTop = guiElement.yDiff+(guiParent.yDiff || 0); //?? 0
 	let guiHeight = (guiElement.type==="title") ? guiElement.orgHeight : guiElement.height;
 	let guiBottom = guiTop+guiHeight;
@@ -3200,19 +3169,19 @@ function GetClosestOption(direction,option){
 	
 	for(let e = 0; e < menuGUI.options.length; e++){
 		let newElement = menuGUI.options[e];
-
+		
 		if(guiElement===newElement || newElement.guiState !== GUIstate.Enabled)
 			continue;
-
+		
 		let newParent = newElement.parent;
-
+		
 		let newTop = newElement.yDiff+(newParent.yDiff || 0); //?? 0
 		let newHeight = (newElement.type==="title") ? newElement.orgHeight : newElement.height;
 		let newBottom = newTop+newHeight;
 		let newLeft = newElement.xDiff+(newParent.xDiff || 0); //?? 0
 		let newWidth = (newElement.type==="title") ? newElement.orgWidth : newElement.width;
 		let newRight = newLeft+newWidth;
-
+		
 		let overlap = 0;
 		if(direction===Input.up || direction===Input.down){
 			overlap = Math.min(guiRight,newRight)-Math.max(guiLeft,newLeft);
@@ -3253,68 +3222,88 @@ function GetClosestOption(direction,option){
 	}
 	return option;
 }
-function NavigateGUI(direction){
-	let optionChanged = false;
-	if(activeOption===null){
-		let previousOption = selectedOption;
-		
-		if(activeSubmenu===GUI.options && direction===Input.up && previousOption===GUI.options.dropdown[0])
-			selectedOption = GUI.options.button[activePlayer-1]; //put selection to active playerButton
-		else
-			selectedOption = GetClosestOption(direction,selectedOption);
-		
-		let stageSelect = (activeSubmenu===GUI.battle && Stages.length>0 && selectedOption.parent === GUI.battle.background[0]);
-		
-		if(previousOption !== selectedOption)
-			optionChanged = true;
-		else if(stageSelect && direction===Input.down){ //stage selection didn't change (this can be removed completely if maxOverlap value is decreased)
-			if(stageRow === GetLastStageRow()-1){ //second last row
-				selectedOption = GUI.battle.stagebutton[Stages.length-1]; //select last stage
-				optionChanged = true;
-			}
-		}
-		if(optionChanged && stageSelect){
-			let selectedStage = selectedOption.stage+1; //index+1
-			while(true){
-				if(stageRow*stageColumnCount < selectedStage-stageColumnCount*stageColumnCount)
-					stageRow++;
-				else if(stageRow*stageColumnCount >= selectedStage)
-					stageRow--;
-				else
-					break;
-			}
-		}
-	} else {
-		if(activeOption.hasOwnProperty("item")){ //dropdown
-			let prevSelectedItem = activeOption.selectedItem;
-			
-			let firstIsActive = (activeOption.activeItem===0);
-			let lastIsActive = (activeOption.activeItem===activeOption.item.length-1);
-			//active item is at the top of the list: (this could be cleaned up (or dropdown items could be changed to regular gui-elements))
-			if(direction===Input.up){
-				if(activeOption.selectedItem-1 === activeOption.activeItem)
-					activeOption.selectedItem -= 1+!firstIsActive;
-				else if(activeOption.selectedItem-1 < 0)
-					activeOption.selectedItem = activeOption.activeItem;
-				else if(activeOption.selectedItem !== activeOption.activeItem)
-					activeOption.selectedItem--;
-			} else if(direction===Input.down){
-				if(activeOption.selectedItem+1 === activeOption.activeItem)
-					activeOption.selectedItem += 2*!lastIsActive;
-				else if(activeOption.selectedItem === activeOption.activeItem)
-					activeOption.selectedItem = 1*(firstIsActive && !lastIsActive);
-				else if(activeOption.selectedItem < activeOption.item.length-1)
-					activeOption.selectedItem++;
-			}
-			
-			if(prevSelectedItem!==activeOption.selectedItem)
-				optionChanged = true;
-		} else if(direction===Input.left || direction===Input.right)
-			SetAdjustBox(CurrentMenu(),activeOption,(direction===Input.left) ? -1 : 1);
-	}
+function PushGuiNavInput(inputType){
+	if(keyBinding || mouseDrag || optionSelected || menuAnimating || loadingScreen)
+		return;
 	
+	if(!guiNavInputs.includes(inputType)) //only one input of each inputType per frame
+		guiNavInputs.push(inputType);
+}
+function NavigateGUI(){
+	let optionChanged = false;
+	for(let i = 0; i < guiNavInputs.length; i++){
+		let input = guiNavInputs[i];
+		if(input===Input.confirm){
+			optionSelected = true;
+			break;
+		} else if(input===Input.cancel){
+			optionSelected = true;
+			selectedOption = cancel;
+			break;
+		}
+		if(activeOption===null){
+			let previousOption = selectedOption;
+			
+			if(activeSubmenu===GUI.options && input===Input.up && previousOption===GUI.options.dropdown[0])
+				selectedOption = GUI.options.button[activePlayer-1]; //put selection to active playerButton
+			else
+				selectedOption = GetClosestOption(input,selectedOption);
+			
+			let stageSelect = (activeSubmenu===GUI.battle && Stages.length>0 && selectedOption.parent === GUI.battle.background[0]);
+			
+			if(previousOption !== selectedOption)
+				optionChanged = true;
+			else if(stageSelect && input===Input.down){ //stage selection didn't change (this can be removed completely if maxOverlap value is decreased)
+				if(stageRow === GetLastStageRow()-1){ //second last row
+					selectedOption = GUI.battle.stagebutton[Stages.length-1]; //select last stage
+					optionChanged = true;
+				}
+			}
+			if(optionChanged && stageSelect){
+				let selectedStage = selectedOption.stage+1; //index+1
+				while(true){
+					if(stageRow*stageColumnCount < selectedStage-stageColumnCount*stageColumnCount)
+						stageRow++;
+					else if(stageRow*stageColumnCount >= selectedStage)
+						stageRow--;
+					else
+						break;
+				}
+			}
+		} else {
+			if(activeOption.hasOwnProperty("item")){ //dropdown
+				let prevSelectedItem = activeOption.selectedItem;
+				
+				let firstIsActive = (activeOption.activeItem===0);
+				let lastIsActive = (activeOption.activeItem===activeOption.item.length-1);
+				//active item is at the top of the list: (this could be cleaned up (or dropdown items could be changed to regular gui-elements))
+				if(input===Input.up){
+					if(activeOption.selectedItem-1 === activeOption.activeItem)
+						activeOption.selectedItem -= 1+!firstIsActive;
+					else if(activeOption.selectedItem-1 < 0)
+						activeOption.selectedItem = activeOption.activeItem;
+					else if(activeOption.selectedItem !== activeOption.activeItem)
+						activeOption.selectedItem--;
+				} else if(input===Input.down){
+					if(activeOption.selectedItem+1 === activeOption.activeItem)
+						activeOption.selectedItem += 2*!lastIsActive;
+					else if(activeOption.selectedItem === activeOption.activeItem)
+						activeOption.selectedItem = 1*(firstIsActive && !lastIsActive);
+					else if(activeOption.selectedItem < activeOption.item.length-1)
+						activeOption.selectedItem++;
+				}
+				
+				if(prevSelectedItem!==activeOption.selectedItem)
+					optionChanged = true;
+			} else if(input===Input.left || input===Input.right)
+				SetAdjustBox(CurrentMenu(),activeOption,(input===Input.left) ? -1 : 1);
+		}
+	}
 	if(optionChanged)
 		PlaySound(Sounds.select);
+	if(optionSelected)
+		PlaySound((selectedOption===cancel || selectedOption.cancel) ? Sounds.cancel : Sounds.confirm);
+	guiNavInputs = [];
 }
 let guiX=0,guiY=0;
 function MouseOver(element){
@@ -3331,7 +3320,7 @@ function MouseOver(element){
 function CheckMouse(clicked){
 	if(optionSelected || menuAnimating)
 		return false;
-
+	
 	let menuGUI = CurrentMenu();
 	
 	for(let e = 0; e < menuGUI.options.length; e++){
@@ -3349,7 +3338,7 @@ function CheckMouse(clicked){
 		
 		if(playerConfirm)
 			continue;
-
+		
 		if(guiElement.type === "dropdown" && !mouseDrag){
 			if(activeOption===guiElement){
 				for(let item = 0; item < guiElement.item.length; item++){
@@ -3391,10 +3380,10 @@ function CheckMouse(clicked){
 				}
 			}
 		}
-
+		
 		if(activeOption!==null)
 			continue;
-
+		
 		if(activeSubmenu===GUI.options){
 			deadzoneTargetWidth = deadzoneSliderSmall;
 			
@@ -3423,14 +3412,14 @@ function CheckMouse(clicked){
 			if(guiElement.type === "stagebutton"){
 				if(!MouseOver(GUI.battle.background[0]))
 					break;
-
+				
 				if(MouseOver(guiElement)){
 					selectedOption=guiElement;
 					return true;
 				}
 			}
 		}
-
+		
 		if(mouseDrag)
 			continue;
 		
@@ -3504,7 +3493,7 @@ function MainMenu(){
 			GUI[selectedOption.menu].run();
 		}
 	}
-
+	
 	LogoDraw();
 	
 	RenderElements(GUI.main);
@@ -3536,9 +3525,9 @@ function Adventure(){
 			InitializeGame(0);
 		}
 	}
-
+	
 	RenderMenu(GUI.adventure.title);
-
+	
 	if(!menuAnimating){
 		if(playerConfirm)
 			PlayerConfirmWindow();
@@ -3606,9 +3595,9 @@ function Battle(){
 			activeOption = null;
 		}
 	}
-
+	
 	RenderMenu(GUI.battle.title);
-
+	
 	if(!menuAnimating || activeOption===GUI.battle.dropdown[0]){
 		if(playerConfirm)
 			PlayerConfirmWindow();
@@ -3630,12 +3619,12 @@ function Battle(){
 			GUI.battle.checkbox[4].data = (noPile) ? Enable : Disable;
 			
 			RenderElements(GUI.battle);
-
+			
 			let bgElement = GUI.battle.background[0];
-
+			
 			tempCanvas.width = bgElement.width*guiScale; //guiScale keeps stageIcons sharp in high screen resolutions
 			tempCanvas.height = bgElement.height*guiScale;
-
+			
 			if(!menuAnimating)
 				stageRowStep = AnimateValue(stageRowStep,stageRow);
 			
@@ -3645,12 +3634,12 @@ function Battle(){
 				let guiElement = GUI.battle.stagebutton[i];
 				
 				let border = guiElement.border;
-
+				
 				let iconBgWidth = (bgElement.width-border*stageColumnCount)/stageColumnCount;
 				let iconBgHeight = (bgElement.height-border*stageColumnCount)/stageColumnCount;
 				guiElement.width = iconBgWidth;
 				guiElement.height = iconBgHeight;
-
+				
 				let bgPosX = (iconBgWidth+border)*i - (iconBgWidth+border)*stageColumnCount*Math.floor(i/stageColumnCount);
 				let bgPosY = (iconBgHeight+border) * Math.floor(i/stageColumnCount) - (iconBgHeight+border)*stageRowStep;
 				guiElement.xDiff = bgPosX;
@@ -3659,22 +3648,22 @@ function Battle(){
 				if(i >= startIndex && i < endIndex){ //only rendering visible icons
 					let iconWidth = Math.min(iconBgHeight*(Stages[i].naturalWidth/Stages[i].naturalHeight),iconBgWidth-border*2);
 					let iconHeight = Math.min(iconBgWidth*(Stages[i].naturalHeight/Stages[i].naturalWidth),iconBgHeight-border*2);
-
+					
 					let iconPosX = bgPosX+(iconBgWidth-iconWidth)/2;
 					let iconPosY = bgPosY+(iconBgHeight-iconHeight)/2;
-
+					
 					tempRender.fillStyle=(selectedOption===guiElement) ? optionBorderHighlightColor : optionBorderColor;
 					tempRender.fillRect(bgPosX*guiScale,bgPosY*guiScale,iconBgWidth*guiScale,iconBgHeight*guiScale);
-
+					
 					tempRender.fillStyle="#000000";
 					tempRender.fillRect(iconPosX*guiScale,iconPosY*guiScale,iconWidth*guiScale,iconHeight*guiScale);
-
+					
 					tempRender.drawImage(Stages[i],iconPosX*guiScale,iconPosY*guiScale,iconWidth*guiScale,iconHeight*guiScale);
 				}
 			}
-
+			
 			guiRender.drawImage(tempCanvas,scaledWidthHalf+bgElement.xDiff,scaledHeightHalf+bgElement.yDiff,bgElement.width,bgElement.height);
-
+			
 			if(loadStageCount > 0){
 				guiRender.fillStyle="#FF0000AA";
 				guiRender.font="40px Arial";
@@ -3714,7 +3703,7 @@ function Options(){
 				}
 			} else if(selectedOption===GUI.options.dropdown[0]){
 				activeOption = selectedOption;
-				GUI.options.dropdown[0].selectedItem = GUI.options.dropdown[0].activeItem;
+				GUI.options.dropdown[0].selectedItem = GUI.options.dropdown[0].activeItem; //or UpdateInputMethodMenu()
 				ShowMenu(GUI.options.dropdown[0]);
 			} else if(selectedOption===GUI.options.checkbox[0]){
 				guiScaleOn=!guiScaleOn;
@@ -3723,24 +3712,26 @@ function Options(){
 				vsync=!vsync;
 		} else if(activeOption===GUI.options.dropdown[0]){
 			let selectedInputMethod = GUI.options.dropdown[0].selectedItem;
-			if(selectedInputMethod!==GUI.options.dropdown[0].activeItem) //if removed: always resets current keyBindings when inputMethod is chosen
-			if(selectedInputMethod<InputMethods.length && selectedOption!==cancel){
-				Players[InputMethods[selectedInputMethod].player].inputInfo = {id:"", index:null};
-				Players[activePlayer].inputInfo = {id:InputMethods[selectedInputMethod].id, index:InputMethods[selectedInputMethod].index};
+			if(selectedInputMethod!==GUI.options.dropdown[0].activeItem && selectedOption!==cancel){ //if 1st condition is removed: always resets current keyBindings when any inputMethod is chosen
+				if(selectedInputMethod<InputMethods.length){
+					Players[activePlayer].inputInfo = {id:InputMethods[selectedInputMethod].id, index:InputMethods[selectedInputMethod].index};
+					KeyBindings[activePlayer] = GetDefaultBindings((selectedInputMethod===0) ? defaultKeyboard : defaultGamepad);
+				} else
+					Players[activePlayer].inputInfo = {id:"noinput", index:null};
 				
-				UpdateInputMethods(false);
-				KeyBindings[activePlayer] = GetDefaultBindings((selectedInputMethod===0) ? defaultKeyboard : defaultGamepad);
+				UpdateInputMethods();
+				for(let pl = 0; pl < Players.length; pl++)
+					Players[pl].confirmKey = false;
 			}
-			Players[InputMethods[0].player].confirmKey = false;
 			HideMenu(GUI.options.dropdown[0]);
 		} else {
 			selectedOption = activeOption;
 			activeOption = null;
 		}
 	}
-
+	
 	RenderMenu(GUI.options.title);
-
+	
 	if(!menuAnimating || activeOption===GUI.options.dropdown[0]){
 		if(selectedOption!==cancel && Players[activePlayer].inputMethod===-1 && (selectedOption.type==="inputfield" || selectedOption.parent.type==="inputfield"))
 			selectedOption = GUI.options.adjustbox[0]; //if gamepad is disconnected while an inputfield is selected
@@ -3750,7 +3741,7 @@ function Options(){
 		
 		SetAdjustNumber(GUI.options.adjustbox[0], Math.floor((6-updateInterval)*20));
 		SetAdjustNumber(GUI.options.adjustbox[1], Math.round(soundVolume*100));
-
+		
 		GUI.options.checkbox[0].data = (guiScaleOn) ? Enable : Disable;
 		GUI.options.checkbox[1].data = (vsync) ? Enable : Disable;
 		
@@ -3771,7 +3762,7 @@ function Options(){
 			if(guiElement.guiState === GUIstate.Enabled){
 				let KeyBind = KeyBindings[activePlayer][guiElement.inputType];
 				guiElement.axisValue = KeyBind.value;
-
+				
 				let inputName = KeyBind.name;
 				if(keyBinding && activeBinding===guiElement.inputType)
 					inputName = keyBindingText;
@@ -3791,6 +3782,26 @@ function Options(){
 				guiElement.textColor = (playerIsActive) ? guiElement.textHighlightColor : PlayerColors[guiElement.player].color;
 				guiElement.bgColor = (playerIsActive) ? PlayerColors[guiElement.player].color : optionBgColor;
 				guiElement.bgHighlightColor = (playerIsActive) ? PlayerColors[guiElement.player].color : PlayerColors[guiElement.player].fadeColor;
+			}
+		}
+		
+		let inputDropdown = GUI.options.dropdown[0];
+		inputDropdown.bgColor = optionBgColor;
+		inputDropdown.bgHighlightColor = PlayerColors[activePlayer].fadeColor;
+		let gradientX1 = scaledWidthHalf+inputDropdown.xDiff;
+		let gradientX2 = gradientX1+inputDropdown.width;
+		for(let method = 0; method < InputMethods.length; method++){
+			let inputPlayers = InputMethods[method].players;
+			if(inputPlayers.length > 0 && inputPlayers[0]!==0){
+				let playerGradient = guiRender.createLinearGradient(gradientX1,0,gradientX2,0);
+				for(let ip = 0; ip < inputPlayers.length; ip++)
+					playerGradient.addColorStop((inputPlayers.length>1) ? ip/(inputPlayers.length-1) : 0, PlayerColors[inputPlayers[ip]].fadeColor);
+				inputDropdown.item[method].bgColor = playerGradient;
+				inputDropdown.item[method].bgHighlightColor = playerGradient;
+				if(inputPlayers.includes(activePlayer) && activeOption!==inputDropdown){
+					inputDropdown.bgColor = playerGradient;
+					inputDropdown.bgHighlightColor = playerGradient;
+				}
 			}
 		}
 		
@@ -3814,11 +3825,11 @@ function Pause(){
 			pause=false;
 		}
 	}
-
+	
 	LogoDraw();
 	
 	RenderElements(GUI.pause);
-
+	
 	if(activeSubmenu !== null)
 		activeSubmenu.run();
 }
@@ -3852,16 +3863,16 @@ function ExitGame(){
 			}
 		}
 	}
-
+	
 	RenderMenu(GUI.exitGame.title);
-
+	
 	if(!menuAnimating)
 		RenderElements(GUI.exitGame);
 }
 function Results(){
 	if(activeMenu!==GUI.results){
 		StopAllSounds();
-		PlaySound(Sounds.confirm);
+		PlaySound(Sounds.death);
 		pause=true;
 		gameStarted=false;
 		activeMenu = GUI.results;
@@ -3921,7 +3932,7 @@ function Results(){
 			playerBar.textYoffset = sizeDiff*(4-w)-playerBar.border*2;
 		}
 		}
-
+		
 		ShowMenu(GUI.results.title);
 	}
 	if(optionSelected){
@@ -3940,9 +3951,9 @@ function Results(){
 			InitializeGame(levelIndex);
 		}
 	}
-
+	
 	RenderMenu(GUI.results.title);
-
+	
 	if(!menuAnimating)
 		RenderElements(GUI.results);
 	
@@ -4036,7 +4047,7 @@ function RenderOption(element){
 		guiRender.setLineDash([]);
 		guiRender.stroke();
 	}
-
+	
 	RenderText(element);
 	
 	RenderElements(element); //for child-elements
@@ -4151,7 +4162,7 @@ function RenderMenu(element){
 	
 	if(element.border>0)
 		guiRender.stroke();
-
+	
 	guiRender.beginPath();
 	let cancelKey = (selectedOption===cancel && activeOption===null); //title is also highlighted when cancel-key is pressed
 	guiRender.strokeStyle = (cancelKey || selectedOption===element) ? element.borderHighlightColor : element.borderColor;
@@ -4166,7 +4177,7 @@ function RenderMenu(element){
 	
 	if(element.border>0)
 		guiRender.stroke();
-
+	
 	RenderText(element);
 }
 function AnimateValue(current,target,animThreshold=0,animSteps={steps:steps}){ //animSteps for multiple chained animations
@@ -4260,7 +4271,7 @@ function PlayerConfirmWindow(){
 		} else
 			playerSlot.background[0].pText = "No input";
 	}
-
+	
 	if(firstJoined !== 0){
 		GUI.playerConfirm.label[1].pText = "P"+firstJoined+": Press "+KeyBindings[firstJoined][Input.pause].name+" to continue";
 		GUI.playerConfirm.label[1].guiState = GUI.playerConfirm.label[2].guiState = GUIstate.Enabled;
@@ -4273,6 +4284,7 @@ function ConfirmPlayers(){
 	if(firstJoined === 0)
 		return;
 	
+	guiNavInputs = [];
 	playerConfirm = false;
 	selectedOption = (activeSubmenu===GUI.adventure) ? GUI.adventure.button[0] : GUI.battle.dropdown[0];
 	
@@ -4395,7 +4407,6 @@ function LogoDraw(){
 			//GLogo.secret=false; //not needed because there are almost always empty pixels in logo when secret is active
 		}
 	}
-	
 	if(GLogo.secret || mouseIsDrawing){
 		GLogo.secret = GLogo.drawStarted;
 		for(let py = 0; py < GLogo.data.length; py++){
@@ -4446,7 +4457,7 @@ function SaveGame(){ //add exeption?: Can not save
 	
 	let PlayerInputInfo = [];
 	for(let pl = 1; pl < Players.length; pl++)
-		PlayerInputInfo.push({id:Players[pl].inputInfo.id, index:null}); //index not stored
+		PlayerInputInfo.push({id:Players[pl].inputInfo.id, index:Players[pl].inputInfo.index});
 	localStorage.setItem('PlayerInputInfo',JSON.stringify(PlayerInputInfo));
 	
 	//LogoSave(); //not needed
@@ -4490,7 +4501,7 @@ function LoadGame(){
 			Players[pl].inputInfo = loadedPlayerInputInfo[pl-1];
 	}
 	
-	UpdateInputMethods(true);
+	UpdateInputMethods();
 	
 	LogoLoad();
 }
@@ -4525,7 +4536,7 @@ function InitializeLevels(){
 	
 	Levels[i].render = Levels[i].canvas.getContext('2d');
 	Levels[i].render.drawImage(Levels[i], 0, 0);
-
+	
 	Levels[i].colData = CreateColData(Levels[i].render.getImageData(0, 0, Levels[i].canvas.width, Levels[i].canvas.height).data);
 	
 	initLevelCount--;
@@ -4556,7 +4567,7 @@ function LoadingScreen(){
 		initLevels = true;
 		InitializeLevels();
 	}
-
+	
 	if(loadingBarProgress < 1)
 		loadingBarProgress = AnimateValue(loadingBarProgress,loadingBarTarget,0.0001);
 	else if(!loadingDone){
@@ -4569,7 +4580,7 @@ function LoadingScreen(){
 		loadingDone = true;
 		activeMenu = GUI.main;
 	}
-
+	
 	let barX = scaledWidthHalf-150;
 	let barY = scaledHeightHalf-20;
 	let barWidth = 300;
@@ -4631,6 +4642,7 @@ function GameLoop(){ //main loop
 		if(loadingScreen)
 			LoadingScreen();
 		else if(activeMenu !== null){
+			NavigateGUI();
 			activeMenu.run();
 			if(menuAnimating)
 				AnimateMenu();
