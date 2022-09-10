@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2022)
-const version = "0x4C3";
+const version = "0x4C4";
 
 function TimeNow(){
 	//return Date.now();
@@ -2804,32 +2804,32 @@ battle:{
 		}
 	],
 	adjustbox:[
-		{data:Adjust, xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
+		{data:Adjust, name:"winScore", xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
 			number:[
 				{data:Numbers[5], xDiff:51, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:31, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:11, textYoffset:4, textWidth:5, textHeight:4}
 			]
-		}, //winScore
-		{data:Adjust, xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
+		},
+		{data:Adjust, name:"lifeCount", xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
 			number:[
 				{data:Numbers[3], xDiff:51, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:31, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:11, textYoffset:4, textWidth:5, textHeight:4}
 			]
-		}, //lifeCount
-		{data:Adjust, xDiff:-251, yDiff:25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
+		},
+		{data:Adjust, name:"shotSpeed", xDiff:-251, yDiff:25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
 			number:[
 				{data:Numbers[5], xDiff:37, textYoffset:4, textWidth:5, textHeight:4}
 			]
-		} //shotSpeed
+		}
 	],
 	checkbox:[
-		{data:Disable, xDiff:-197, yDiff:70, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4}, //infiniteJump
-		{data:Disable, xDiff:-197, yDiff:115, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4}, //knockBack
-		{data:Disable, xDiff:-197, yDiff:160, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4}, //instantCharge
-		{data:Disable, xDiff:-197, yDiff:205, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4}, //fixedCamera
-		{data:Disable, xDiff:-197, yDiff:250, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4} //noPile
+		{data:Disable, name:"infiniteJump", xDiff:-197, yDiff:70, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
+		{data:Disable, name:"noKnockback", xDiff:-197, yDiff:115, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
+		{data:Disable, name:"instantCharge", xDiff:-197, yDiff:160, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
+		{data:Disable, name:"fixedCamera", xDiff:-197, yDiff:205, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
+		{data:Disable, name:"noPile", xDiff:-197, yDiff:250, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4}
 	],
 	button:[
 		{data:Minus, xDiff:-140, yDiff:-147, width:60, height:52, textXoffset:3, textYoffset:2},
@@ -2867,24 +2867,24 @@ options:{
 		{data:positiveAimYText, xDiff:-270, yDiff:251, textWidth:4, textHeight:3}
 	],
 	adjustbox:[
-		{data:Adjust, xDiff:-103, yDiff:-62, width:161, height:57, textXoffset:4, textYoffset:4,
+		{data:Adjust, name:"updateInterval", xDiff:-103, yDiff:-62, width:161, height:57, textXoffset:4, textYoffset:4,
 			number:[
 				{data:Numbers[0], xDiff:90, textYoffset:4},
 				{data:Numbers[0], xDiff:54, textYoffset:4},
 				{data:Numbers[1], xDiff:17, textYoffset:4}
 			]
 		}, //collisionQuality
-		{data:Adjust, xDiff:-103, yDiff:0, width:161, height:57, textXoffset:4, textYoffset:4,
+		{data:Adjust, name:"soundVolume", xDiff:-103, yDiff:0, width:161, height:57, textXoffset:4, textYoffset:4,
 			number:[
 				{data:Numbers[0], xDiff:90, textYoffset:4},
 				{data:Numbers[0], xDiff:54, textYoffset:4},
 				{data:Numbers[1], xDiff:17, textYoffset:4}
 			]
-		} //soundVolume
+		}
 	],
 	checkbox:[
-		{data:Enable, xDiff:-103, yDiff:71, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5}, //guiScale
-		{data:Enable, xDiff:-317, yDiff:71, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5} //v-sync
+		{data:Enable, name:"guiScaleOn", xDiff:-103, yDiff:71, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5},
+		{data:Enable, name:"vsync", xDiff:-317, yDiff:71, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5}
 	],
 	inputfield:[ //keyBinding inputfield
 		{data:null, inputType:Input.up, xDiff:200, yDiff:-139, width:199, height:40, pTextAlign:"right", pFontSize:30, pTextXoffset:-6, pTextYoffset:-10,
@@ -3036,6 +3036,12 @@ function AddDefaultProperties(element, elementType, parent, menu=null){ //elemen
 			if(!menu.hasOwnProperty("options"))
 				menu.options = [];
 			menu.options.push(element);
+		}
+		if(element.type==="checkbox" || element.type==="adjustbox"){
+			Object.defineProperty(element,"value",{
+				get: new Function("return "+element.name+";"),
+				set: new Function("v",element.name+"=v;")
+			});
 		}
 	} else
 		element.isOption = false;
@@ -3318,7 +3324,7 @@ function MouseOver(element){
 	return false;
 }
 function CheckMouse(clicked){
-	if(optionSelected || menuAnimating)
+	if(menuAnimating)
 		return false;
 	
 	let menuGUI = CurrentMenu();
@@ -3433,34 +3439,24 @@ function CheckMouse(clicked){
 	return false;
 }
 function SetAdjustBox(menu,option,change){
-	let oldAdjust = 0, newAdjust = 0;
+	let oldValue = option.value;
 	if(menu===GUI.battle){
 		if(option===GUI.battle.adjustbox[0]){
-			oldAdjust = winScore;
 			winScore = Clamp(winScore+change, 1, 100);
-			newAdjust = winScore;
 		} else if(option===GUI.battle.adjustbox[1]){
-			oldAdjust = lifeCount;
 			lifeCount = Clamp(lifeCount+change, 1, 100);
-			newAdjust = lifeCount;
 		} else if(option===GUI.battle.adjustbox[2]){
-			oldAdjust = shotSpeed;
 			shotSpeed = Clamp(shotSpeed+change, 1, 5);
-			newAdjust = shotSpeed;
 		}
 	} else if(menu===GUI.options){
 		if(option===GUI.options.adjustbox[0]){
-			oldAdjust = updateInterval;
 			updateInterval = Clamp(updateInterval-change, 1, 5);
 			UpdateMultiplier(updateInterval);
-			newAdjust = updateInterval;
 		} else if(option===GUI.options.adjustbox[1]){
-			oldAdjust = soundVolume;
 			soundVolume = Clamp(soundVolume+change*0.01, 0, 1);
-			newAdjust = soundVolume;
 		}
 	}
-	if(oldAdjust!==newAdjust)
+	if(oldValue!==option.value)
 		PlaySound(Sounds.select);
 }
 function SetAdjustNumber(adjustBox, adjustNumber){
@@ -3556,22 +3552,14 @@ function Battle(){
 				playerConfirm = false;
 				HideMenu(GUI.battle.title);
 			} else if(!playerConfirm){
-				if(selectedOption===GUI.battle.dropdown[0]){
+				if(selectedOption.type==="dropdown"){
 					activeOption = selectedOption;
-					GUI.battle.dropdown[0].selectedItem = GUI.battle.dropdown[0].activeItem;
-					ShowMenu(GUI.battle.dropdown[0]);
+					activeOption.selectedItem = activeOption.activeItem;
+					ShowMenu(activeOption);
 				} else if(selectedOption.type==="adjustbox")
 					activeOption = selectedOption;
-				else if(selectedOption===GUI.battle.checkbox[0])
-					infiniteJump=!infiniteJump;
-				else if(selectedOption===GUI.battle.checkbox[1])
-					noKnockback=!noKnockback;
-				else if(selectedOption===GUI.battle.checkbox[2])
-					instantCharge=!instantCharge;
-				else if(selectedOption===GUI.battle.checkbox[3])
-					fixedCamera=!fixedCamera;
-				else if(selectedOption===GUI.battle.checkbox[4])
-					noPile=!noPile;
+				else if(selectedOption.type==="checkbox")
+					selectedOption.value=!selectedOption.value;
 				else if(selectedOption===GUI.battle.button[0] || selectedOption===GUI.battle.button[1]){
 					let columnDir = (selectedOption===GUI.battle.button[0]) ? -1 : 1;
 					let newColumnCount = Clamp(stageColumnCount+columnDir, 1, Math.max(Stages.length,3));
@@ -3588,8 +3576,8 @@ function Battle(){
 			}
 		} else if(activeOption===GUI.battle.dropdown[0]){
 			if(selectedOption!==cancel)
-				gameType = GUI.battle.dropdown[0].selectedItem;
-			HideMenu(GUI.battle.dropdown[0]);
+				gameType = activeOption.selectedItem;
+			HideMenu(activeOption);
 		} else {
 			selectedOption = activeOption;
 			activeOption = null;
@@ -3608,15 +3596,11 @@ function Battle(){
 			GUI.battle.label[2].guiState = (gameType===GameType.score) ? GUIstate.Enabled : GUIstate.Hidden;
 			GUI.battle.label[3].guiState = (gameType===GameType.life) ? GUIstate.Enabled : GUIstate.Hidden;
 			
-			SetAdjustNumber(GUI.battle.adjustbox[0], winScore);
-			SetAdjustNumber(GUI.battle.adjustbox[1], lifeCount);
-			SetAdjustNumber(GUI.battle.adjustbox[2], shotSpeed);
+			for(let i = 0; i < GUI.battle.adjustbox.length; i++)
+				SetAdjustNumber(GUI.battle.adjustbox[i], GUI.battle.adjustbox[i].value);
 			
-			GUI.battle.checkbox[0].data = (infiniteJump) ? Enable : Disable;
-			GUI.battle.checkbox[1].data = (noKnockback) ? Enable : Disable;
-			GUI.battle.checkbox[2].data = (instantCharge) ? Enable : Disable;
-			GUI.battle.checkbox[3].data = (fixedCamera) ? Enable : Disable;
-			GUI.battle.checkbox[4].data = (noPile) ? Enable : Disable;
+			for(let i = 0; i < GUI.battle.checkbox.length; i++)
+				GUI.battle.checkbox[i].data = (GUI.battle.checkbox[i].value) ? Enable : Disable;
 			
 			RenderElements(GUI.battle);
 			
@@ -3686,7 +3670,7 @@ function Options(){
 			if(selectedOption===cancel || selectedOption.cancel){
 				SaveGame();
 				HideMenu(GUI.options.title);
-			} else if(selectedOption===GUI.options.adjustbox[0] || selectedOption===GUI.options.adjustbox[1])
+			} else if(selectedOption.type==="adjustbox")
 				activeOption = selectedOption;
 			else if(selectedOption.hasOwnProperty("player")){ //playerButtons
 				activePlayer = selectedOption.player;
@@ -3701,18 +3685,17 @@ function Options(){
 					activeOption = selectedOption;
 					StartKeyBinding(selectedOption.parent.inputType,false);
 				}
-			} else if(selectedOption===GUI.options.dropdown[0]){
+			} else if(selectedOption.type==="dropdown"){
 				activeOption = selectedOption;
-				GUI.options.dropdown[0].selectedItem = GUI.options.dropdown[0].activeItem; //or UpdateInputMethodMenu()
-				ShowMenu(GUI.options.dropdown[0]);
-			} else if(selectedOption===GUI.options.checkbox[0]){
-				guiScaleOn=!guiScaleOn;
+				activeOption.selectedItem = activeOption.activeItem;
+				ShowMenu(activeOption);
+			} else if(selectedOption.type==="checkbox"){
+				selectedOption.value=!selectedOption.value;
 				ScreenSize();
-			} else if(selectedOption===GUI.options.checkbox[1])
-				vsync=!vsync;
+			}
 		} else if(activeOption===GUI.options.dropdown[0]){
-			let selectedInputMethod = GUI.options.dropdown[0].selectedItem;
-			if(selectedInputMethod!==GUI.options.dropdown[0].activeItem && selectedOption!==cancel){ //if 1st condition is removed: always resets current keyBindings when any inputMethod is chosen
+			let selectedInputMethod = activeOption.selectedItem;
+			if(selectedInputMethod!==activeOption.activeItem && selectedOption!==cancel){ //if 1st condition is removed: always resets current keyBindings when any inputMethod is chosen
 				if(selectedInputMethod<InputMethods.length){
 					Players[activePlayer].inputInfo = {id:InputMethods[selectedInputMethod].id, index:InputMethods[selectedInputMethod].index};
 					KeyBindings[activePlayer] = GetDefaultBindings((selectedInputMethod===0) ? defaultKeyboard : defaultGamepad);
@@ -3723,7 +3706,7 @@ function Options(){
 				for(let pl = 0; pl < Players.length; pl++)
 					Players[pl].confirmKey = false;
 			}
-			HideMenu(GUI.options.dropdown[0]);
+			HideMenu(activeOption);
 		} else {
 			selectedOption = activeOption;
 			activeOption = null;
@@ -3742,8 +3725,8 @@ function Options(){
 		SetAdjustNumber(GUI.options.adjustbox[0], Math.floor((6-updateInterval)*20));
 		SetAdjustNumber(GUI.options.adjustbox[1], Math.round(soundVolume*100));
 		
-		GUI.options.checkbox[0].data = (guiScaleOn) ? Enable : Disable;
-		GUI.options.checkbox[1].data = (vsync) ? Enable : Disable;
+		for(let i = 0; i < GUI.options.checkbox.length; i++)
+			GUI.options.checkbox[i].data = (GUI.options.checkbox[i].value) ? Enable : Disable;
 		
 		let guiElement = GUI.options.background[0]; //StickAim test area
 		guiElement.guiState = (Players[activePlayer].inputMethod!==-1) ? GUIstate.Enabled : GUIstate.Disabled;
