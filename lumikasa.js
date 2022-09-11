@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2022)
-const version = "0x4C4";
+const version = "0x4C5";
 
 function TimeNow(){
 	//return Date.now();
@@ -28,35 +28,63 @@ let PlayerColors = [null,
 {color:"#FFFF00", fadeColor:"#777700", bgColor:"#FFFFCC", bgFadeColor:"#777766"} //player4
 ];
 
-let maxSpeed = 0.625;
-let positionCorrection = 0.05;
-let jumpForce = -0.625;
-let maxDropSpeed = 1.25;
-let ballSpeed = 2.5;
-let knockBackForce = 0.02;
-let momentumThreshold = 0.005;
+let GameMode = {adventure:0,battle:1};
+let GameType = {score:0,life:1};
 
-let momentumChange = 0.00025;
-let friction = 0.001;
-let acceleration = 0.0025;
-let dropAcceleration = 0.002;
-
-let chargeInterval = 10; //ms
-let jumpLimit = 300; //ms
-let invulnerabilityLimit = 5000; //ms
-let statusVisibilityLimit = 5000; //ms
-
-let baseMaxSpeed=maxSpeed,
-basePositionCorrection=positionCorrection,
-baseJumpForce=jumpForce,
-baseMaxDropSpeed=maxDropSpeed,
-baseBallSpeed=ballSpeed,
-baseKnockBackForce=knockBackForce,
-baseMomentumThreshold=momentumThreshold,
-baseMomentumChange=momentumChange,
-baseFriction=friction,
-baseAcceleration=acceleration,
-baseDropAcceleration=dropAcceleration;
+let Game = {
+	maxSpeed:0.625,
+	positionCorrection:0.05,
+	jumpForce:-0.625,
+	maxDropSpeed:1.25,
+	ballSpeed:2.5,
+	knockBackForce:0.02,
+	momentumThreshold:0.005,
+	momentumChange:0.00025,
+	friction:0.001,
+	acceleration:0.0025,
+	dropAcceleration:0.002,
+	chargeInterval:10, //ms
+	jumpLimit:300, //ms
+	invulnerabilityLimit:5000, //ms
+	statusVisibilityLimit:5000, //ms
+	mode:GameMode.adventure,
+	type:GameType.score,
+	pause:true,
+	started:false,
+	noClip:false,
+	noBounds:false,
+	noCollect:false,
+	noGrow:false,
+	noPile:false,
+	noKnockback:false,
+	collectCharge:false,
+	instantCharge:false,
+	wallJump:false,
+	infiniteJump:false,
+	fixedCamera:false,
+	shotSpeed:5,
+	aimArea:1000,
+	aimMargin:0.6,
+	winScore:5,
+	lifeCount:3,
+	levelIndex:0,
+	soundVolume:0.15,
+	pixelScale:100,
+	guiScale:1,
+	guiScaleOn:true,
+	imageSmooth:true,
+	noClear:false,
+	vsync:true,
+	updateInterval:2,
+	speedMultiplier:0,
+	lastTime:TimeNow(),
+	steps:0,
+	frameHold:false,
+	frameStep:false,
+	debugMode:false
+};
+for(let i = 0; i < 11; i++) //saving base speed and acceleration values
+	Game["base"+Object.keys(Game)[i]] = Game[Object.keys(Game)[i]];
 
 let LevelImages = [];
 for(let i = 0; i <= 68; i++)
@@ -105,7 +133,7 @@ let terrain = {
 	colData:[],
 	collided:new Array(Levels.length),
 	ResetCollided(){
-		let collidedLength = gameMode===GameMode.adventure ? this.collided.length : 1;
+		let collidedLength = Game.mode===GameMode.adventure ? this.collided.length : 1;
 		for(let c = 0; c < collidedLength; c++)
 			this.collided[c] = false;
 	}
@@ -127,13 +155,11 @@ for(let i = 1; i < Crosshair.length; i++){
 		this.yOffset = this.naturalHeight/2;
 	};
 }
-let aimArea = 1000;
-let aimMargin = 0.6;
 
 let snowRate = 0;
 function SnowRate(multiplier,min){
 	//return Clamp(snowRate*multiplier,min,1);
-	return Clamp(snowRate*Math.pow(multiplier,speedMultiplier),min,1);
+	return Clamp(snowRate*Math.pow(multiplier,Game.speedMultiplier),min,1);
 }
 
 let Sounds = {
@@ -151,16 +177,16 @@ for(let sound in Sounds){
 		Sounds[sound].oncanplaythrough = function(){loadSoundCount--;};
 }
 function PlaySound(sound){
-	if(soundVolume>0){
-		sound.volume = soundVolume;
+	if(Game.soundVolume>0){
+		sound.volume = Game.soundVolume;
 		//sound.pause();
 		sound.currentTime=0;
 		if(sound.paused)
 			sound.play();
 	}
 } function LoopSound(sound,volumeMultiplier){
-	if(soundVolume>0){
-		sound.volume = soundVolume*volumeMultiplier;
+	if(Game.soundVolume>0){
+		sound.volume = Game.soundVolume*volumeMultiplier;
 		if(sound.paused){
 			sound.loop = true;
 			sound.play();
@@ -285,7 +311,7 @@ let guiRender = guiCanvas.getContext('2d');
 let tempCanvas = document.createElement('canvas');
 let tempRender = tempCanvas.getContext('2d');
 
-let screenWidth = 0, screenHeight = 0, pixelRatio = 0, pixelScale = 100;
+let screenWidth = 0, screenHeight = 0, pixelRatio = 0;
 let scaledWidth = 0, scaledHeight = 0;
 let scaledWidthHalf = 0, scaledHeightHalf = 0;
 
@@ -316,6 +342,7 @@ let Input = {
 	aimYpos:13
 };
 let guiNavInputs = [];
+let directionInputRepeatDelay = 500; //ms
 let defaultKeyboard = [
 	{name:["ArrowUp","W"], input:["ArrowUp","KeyW"], deadzone:0},
 	{name:["ArrowDown","S"], input:["ArrowDown","KeyS"], deadzone:0},
@@ -401,32 +428,62 @@ KeyBindings[2] = GetDefaultBindings(defaultGamepad); //player2
 KeyBindings[3] = GetDefaultBindings(defaultGamepad); //player3
 KeyBindings[4] = GetDefaultBindings(defaultGamepad); //player4
 
-let directionInputRepeatDelay = 500; //ms
-
-//System (+Debug) variables
-let pause = true;
-let gameStarted = false;
-let noClear = false;
-let noClip = false;
-let noBounds = false;
-let noCollect = false;
-let noGrow = false;
-let noPile = false;
-let collectCharge = false;
-let instantCharge = false;
-let infiniteJump = false;
-let wallJump = false;
-let noKnockback = false;
-let fixedCamera = false;
-let imageSmooth = true;
-let shotSpeed = 5;
-let winScore = 5;
-let lifeCount = 3;
-let levelIndex = 0; //levelIndex AND stageIndex?
-let soundVolume = 0.15;
-let guiScaleOn = true;
-let guiScale = 1;
-let vsync = true;
+let DebugKeys = {
+	ScrollLock(){
+		Game.debugMode=!Game.debugMode;
+		PerfInfo.Reset();
+	},
+	Comma(){
+		Game.frameHold=!Game.frameHold;
+		Game.lastTime = TimeNow();
+	},
+	Period(){
+		Game.frameStep=true;
+		Game.frameHold=true;
+		Game.lastTime = TimeNow();
+	},
+	KeyX(){
+		Game.guiScaleOn=!Game.guiScaleOn;
+		ScreenSize();
+	},
+	KeyN(){
+		if(Game.pixelScale>1)Game.pixelScale--;
+		ScreenSize();
+	},
+	KeyM(){
+		Game.pixelScale++;
+		ScreenSize();
+	},
+	KeyZ(){
+		Game.imageSmooth=!Game.imageSmooth;
+		ScreenSize();
+	},
+	KeyC(){Game.noClear=!Game.noClear;},
+	KeyV(){Game.vsync=!Game.vsync;},
+	KeyG(){LoadLevel(Game.levelIndex-1);},
+	KeyH(){LoadLevel(Game.levelIndex+1);},
+	KeyJ(){Game.aimMargin = Clamp(Game.aimMargin*0.98, 0.0001, 1);},
+	KeyL(){Game.aimMargin = Clamp(Game.aimMargin*1.02, 0.0001, 1);},
+	KeyI(){Game.aimArea = Clamp(Game.aimArea*0.98, 1, Infinity);},
+	KeyK(){Game.aimArea = Clamp(Game.aimArea*1.02, 1, Infinity);},
+	Home(){Game.updateInterval++;},
+	End(){if(Game.updateInterval>1) Game.updateInterval--;},
+	PageUp(){UpdateMultiplier(Game.speedMultiplier+1);},
+	PageDown(){UpdateMultiplier(Game.speedMultiplier-1);},
+	Digit1(){Game.noClip=!Game.noClip;},
+	Digit2(){Game.noBounds=!Game.noBounds;},
+	Digit3(){Game.noCollect=!Game.noCollect;},
+	Digit4(){Game.noGrow=!Game.noGrow;},
+	Digit5(){Game.noPile=!Game.noPile;},
+	Digit6(){Game.noKnockback=!Game.noKnockback;},
+	Digit7(){Game.collectCharge=!Game.collectCharge;},
+	Digit8(){Game.instantCharge=!Game.instantCharge;},
+	Digit9(){Game.wallJump=!Game.wallJump;},
+	Digit0(){Game.infiniteJump=!Game.infiniteJump;},
+	Backquote(){Game.fixedCamera=!Game.fixedCamera;},
+	Minus(){if(Game.shotSpeed>0) Game.shotSpeed--;},
+	Equal(){Game.shotSpeed++;}
+};
 let PerfInfo = {
 	Reset(){
 		this.frameCount=0;
@@ -447,7 +504,7 @@ let PerfInfo = {
 		this.frameTime = currentTime-this.frameUpdate;
 		this.frameTimeMax = Math.max(this.frameTime,this.frameTimeMax);
 		//this.frameTimeLog.push(this.frameTime);
-		this.frameInfo = "Frame:"+this.totalFrameCount+" | "+this.frameTime.toFixed(3)+"ms (max:"+this.frameTimeMax.toFixed(3)+") | Steps:"+steps.toFixed(3);
+		this.frameInfo = "Frame:"+this.totalFrameCount+" | "+this.frameTime.toFixed(3)+"ms (max:"+this.frameTimeMax.toFixed(3)+") | Steps:"+Game.steps.toFixed(3);
 		this.frameUpdate = currentTime;
 	},
 	LogFps(currentTime){
@@ -464,104 +521,31 @@ let PerfInfo = {
 			this.LogFps(currentTime);
 	}
 };
-let updateInterval = 2;
-let speedMultiplier = 0;
-let lastTime = TimeNow();
-let steps = 0;
-let frameHold = false;
-let frameStep = false;
-let debugMode = false;
-let DebugKeys = {
-	ScrollLock(){
-		debugMode=!debugMode;
-		PerfInfo.Reset();
-	},
-	Comma(){
-		frameHold=!frameHold;
-		lastTime = TimeNow();
-	},
-	Period(){
-		frameStep=true;
-		frameHold=true;
-		lastTime = TimeNow();
-	},
-	KeyX(){
-		guiScaleOn=!guiScaleOn;
-		ScreenSize();
-	},
-	KeyN(){
-		if(pixelScale>1)pixelScale--;
-		ScreenSize();
-	},
-	KeyM(){
-		pixelScale++;
-		ScreenSize();
-	},
-	KeyZ(){
-		imageSmooth=!imageSmooth;
-		ScreenSize();
-	},
-	KeyC(){noClear=!noClear;},
-	KeyV(){vsync=!vsync;},
-	KeyG(){LoadLevel(levelIndex-1);},
-	KeyH(){LoadLevel(levelIndex+1);},
-	KeyJ(){aimMargin = Clamp(aimMargin*0.98, 0.0001, 1);},
-	KeyL(){aimMargin = Clamp(aimMargin*1.02, 0.0001, 1);},
-	KeyI(){aimArea = Clamp(aimArea*0.98, 1, Infinity);},
-	KeyK(){aimArea = Clamp(aimArea*1.02, 1, Infinity);},
-	Home(){updateInterval++;},
-	End(){if(updateInterval>1) updateInterval--;},
-	PageUp(){UpdateMultiplier(speedMultiplier+1);},
-	PageDown(){UpdateMultiplier(speedMultiplier-1);},
-	Digit1(){noClip=!noClip;},
-	Digit2(){noBounds=!noBounds;},
-	Digit3(){noCollect=!noCollect;},
-	Digit4(){noGrow=!noGrow;},
-	Digit5(){noPile=!noPile;},
-	Digit6(){noKnockback=!noKnockback;},
-	Digit7(){collectCharge=!collectCharge;},
-	Digit8(){instantCharge=!instantCharge;},
-	Digit9(){wallJump=!wallJump;},
-	Digit0(){infiniteJump=!infiniteJump;},
-	Backquote(){fixedCamera=!fixedCamera;},
-	Minus(){if(shotSpeed>0) shotSpeed--;},
-	Equal(){shotSpeed++;}
-};
-let GameMode = {
-	adventure:0,
-	battle:1
-};
-let gameMode = GameMode.adventure;
-let GameType = {
-	score:0,
-	life:1
-};
-let gameType = GameType.score;
 
-UpdateMultiplier(updateInterval);
+UpdateMultiplier(Game.updateInterval);
 
 function ScreenSize(){ //Initialize game screen and update middlePoint (if screensize changes...)
-	pixelRatio = Math.max(window.devicePixelRatio*(pixelScale/100),1/gameCanvas.offsetWidth,1/gameCanvas.offsetHeight);
+	pixelRatio = Math.max(window.devicePixelRatio*(Game.pixelScale/100),1/gameCanvas.offsetWidth,1/gameCanvas.offsetHeight);
 	screenWidth = gameCanvas.offsetWidth*pixelRatio;
 	screenHeight = gameCanvas.offsetHeight*pixelRatio;
 	
 	gameCanvas.width = guiCanvas.width = screenWidth;
 	gameCanvas.height = guiCanvas.height = screenHeight;
 	
-	if(guiScaleOn){
-		guiScale = Math.min(screenWidth/1280,screenHeight/720);
+	if(Game.guiScaleOn){
+		Game.guiScale = Math.min(screenWidth/1280,screenHeight/720);
 		
-		/*if(guiScale>=1)
-			guiScale = Math.floor(guiScale);*/ //integer scale for menus if resolution is high enough
+		/*if(Game.guiScale>=1)
+			Game.guiScale = Math.floor(Game.guiScale);*/ //integer scale for menus if resolution is high enough
 		
-		guiRender.scale(guiScale,guiScale);
+		guiRender.scale(Game.guiScale,Game.guiScale);
 	} else
-		guiScale = 1;
+		Game.guiScale = 1;
 	
-	gameRender.imageSmoothingEnabled = guiRender.imageSmoothingEnabled = imageSmooth;
+	gameRender.imageSmoothingEnabled = guiRender.imageSmoothingEnabled = Game.imageSmooth;
 	
-	scaledWidth = screenWidth/guiScale;
-	scaledHeight = screenHeight/guiScale;
+	scaledWidth = screenWidth/Game.guiScale;
+	scaledHeight = screenHeight/Game.guiScale;
 	
 	scaledWidthHalf = Math.floor(scaledWidth/2);
 	scaledHeightHalf = Math.floor(scaledHeight/2);
@@ -571,8 +555,8 @@ function ScreenSize(){ //Initialize game screen and update middlePoint (if scree
 }
 function UpdateMultiplier(value){ //pre-calculate movement values
 	let newSpeedMultiplier = (value>1) ? value : 1;
-	let speedModifier = newSpeedMultiplier/speedMultiplier;
-	speedMultiplier = newSpeedMultiplier;
+	let speedModifier = newSpeedMultiplier/Game.speedMultiplier;
+	Game.speedMultiplier = newSpeedMultiplier;
 	
 	for(let p = 0; p < IngamePlayers.length; p++){
 		IngamePlayers[p].momentumX *= speedModifier;
@@ -580,18 +564,18 @@ function UpdateMultiplier(value){ //pre-calculate movement values
 		IngamePlayers[p].rotMomentum *= speedModifier;
 	}
 	
-	maxSpeed = baseMaxSpeed*speedMultiplier;
-	positionCorrection = basePositionCorrection*speedMultiplier;
-	jumpForce = baseJumpForce*speedMultiplier;
-	maxDropSpeed = baseMaxDropSpeed*speedMultiplier;
-	ballSpeed = baseBallSpeed*speedMultiplier;
-	knockBackForce = baseKnockBackForce*speedMultiplier;
-	momentumThreshold = baseMomentumThreshold*speedMultiplier;
+	Game.maxSpeed = Game.basemaxSpeed*Game.speedMultiplier;
+	Game.positionCorrection = Game.basepositionCorrection*Game.speedMultiplier;
+	Game.jumpForce = Game.basejumpForce*Game.speedMultiplier;
+	Game.maxDropSpeed = Game.basemaxDropSpeed*Game.speedMultiplier;
+	Game.ballSpeed = Game.baseballSpeed*Game.speedMultiplier;
+	Game.knockBackForce = Game.baseknockBackForce*Game.speedMultiplier;
+	Game.momentumThreshold = Game.basemomentumThreshold*Game.speedMultiplier;
 	
-	momentumChange = baseMomentumChange*Math.pow(speedMultiplier,2);
-	friction = baseFriction*Math.pow(speedMultiplier,2);
-	acceleration = baseAcceleration*Math.pow(speedMultiplier,2);
-	dropAcceleration = baseDropAcceleration*Math.pow(speedMultiplier,2);
+	Game.momentumChange = Game.basemomentumChange*Math.pow(Game.speedMultiplier,2);
+	Game.friction = Game.basefriction*Math.pow(Game.speedMultiplier,2);
+	Game.acceleration = Game.baseacceleration*Math.pow(Game.speedMultiplier,2);
+	Game.dropAcceleration = Game.basedropAcceleration*Math.pow(Game.speedMultiplier,2);
 }
 function DirectionalKey(player, inputType, state, value){
 	let oldState = false;
@@ -629,7 +613,7 @@ function DirectionalKey(player, inputType, state, value){
 		}
 	} else {
 		if(player.jumpTimer>0)
-			player.jumpTimer=jumpLimit;
+			player.jumpTimer = Game.jumpLimit;
 		player.jump = false;
 		player.newJump = true;
 	}
@@ -661,7 +645,7 @@ function DirectionalKey(player, inputType, state, value){
 	player.cancelKey = state;
 } function PauseKey(player, state){
 	if(!player.pauseKey && state){
-		if(gameStarted && !pause)
+		if(Game.started && !Game.pause)
 			Pause();
 		else if(playerConfirm){
 			if(player.number===firstJoined && player.joined)
@@ -781,8 +765,8 @@ function InputUpdate(input,players,value){
 	return validInput;
 }
 function UpdateMousePos(x,y){
-	mouseX = x/guiScale*pixelRatio;
-	mouseY = y/guiScale*pixelRatio;
+	mouseX = x/Game.guiScale*pixelRatio;
+	mouseY = y/Game.guiScale*pixelRatio;
 	mouseAxisX = mouseX/(scaledWidthHalf)-1;
 	mouseAxisY = mouseY/(scaledHeightHalf)-1;
 }
@@ -810,7 +794,7 @@ document.addEventListener('keydown', function(event){
 			
 			event.preventDefault();
 		} else if(DebugKeys.hasOwnProperty(event.code)){
-			if(debugMode || event.code === Object.keys(DebugKeys)[0])//other DebugKeys are checked only in debugMode
+			if(Game.debugMode || event.code === Object.keys(DebugKeys)[0])//other DebugKeys are checked only in debugMode
 				DebugKeys[event.code]();
 			event.preventDefault();
 		}
@@ -1145,7 +1129,7 @@ function UpdateLevelData(level,levelX,levelY){ //object.level could be updated i
 	let newLevelX = levelX;
 	let newLevelY = levelY;
 	let newLevel = 0;
-	if(gameMode===GameMode.adventure){
+	if(Game.mode===GameMode.adventure){
 		newLevel = FindLevel(level,newLevelX,newLevelY);
 		SetTerrainProperties(newLevel);
 		
@@ -1179,51 +1163,51 @@ function FindLevel(currentLevel,levelXpos,levelYpos){
 	
 	return newLevel;
 }
-function LoadLevel(index){
+function LoadLevel(lIndex){
 	if(activeMenu!==null || loadingScreen)
 		return;
 	
-	levelIndex = index;
-	if(gameMode===GameMode.adventure){
-		if(levelIndex<0)
-			levelIndex=Levels.length-1;
-		else if(levelIndex>=Levels.length || levelIndex===null) //failsafe
-			levelIndex=0;
+	Game.levelIndex = lIndex;
+	if(Game.mode===GameMode.adventure){
+		if(lIndex<0)
+			lIndex=Levels.length-1;
+		else if(lIndex>=Levels.length || lIndex===null) //failsafe
+			lIndex=0;
 		
-		SetTerrainProperties(levelIndex);
+		SetTerrainProperties(lIndex);
 		
 		for(let p = 0; p < IngamePlayers.length; p++)
-			IngamePlayers[p].level = levelIndex;
+			IngamePlayers[p].level = lIndex;
 		
-		levelPosX = -Levels[levelIndex].xOffset;
-		levelPosY = -Levels[levelIndex].yOffset;
+		levelPosX = -Levels[lIndex].xOffset;
+		levelPosY = -Levels[lIndex].yOffset;
 	} else {
-		if(levelIndex<0)
-			levelIndex=Stages.length-1;
-		else if(levelIndex>=Stages.length || levelIndex===null) //failsafe
-			levelIndex=0;
+		if(lIndex<0)
+			lIndex=Stages.length-1;
+		else if(lIndex>=Stages.length || lIndex===null) //failsafe
+			lIndex=0;
 		
-		stageCanvas.width = Stages[levelIndex].naturalWidth;
-		stageCanvas.height = Stages[levelIndex].naturalHeight;
+		stageCanvas.width = Stages[lIndex].naturalWidth;
+		stageCanvas.height = Stages[lIndex].naturalHeight;
 		stageRender = stageCanvas.getContext('2d');
 		
 		terrain.canvas = stageCanvas;
 		terrain.render = stageRender;
 		
-		terrain.render.drawImage(Stages[levelIndex], 0, 0 );
+		terrain.render.drawImage(Stages[lIndex], 0, 0 );
 		
 		terrain.colData = CreateColData(terrain.render.getImageData(0, 0, terrain.canvas.width, terrain.canvas.height).data);
 	}
 	InitializePlayers();
 }
 function InitializeGame(level){
-	if(gameMode===GameMode.adventure && !debugMode){
-		shotSpeed = 5;
-		infiniteJump = false;
-		noKnockback = false;
-		instantCharge = false;
-		fixedCamera = false;
-		noPile = false;
+	if(Game.mode===GameMode.adventure && !Game.debugMode){
+		Game.shotSpeed = 5;
+		Game.infiniteJump = false;
+		Game.noKnockback = false;
+		Game.instantCharge = false;
+		Game.fixedCamera = false;
+		Game.noPile = false;
 	}
 	
 	IngamePlayers = [];
@@ -1234,9 +1218,9 @@ function InitializeGame(level){
 	
 	LoadLevel(level);
 	
-	pause = false;
-	gameStarted = true;
-	lastTime = TimeNow(); //adds a little delay when the game starts
+	Game.pause = false;
+	Game.started = true;
+	Game.lastTime = TimeNow(); //adds a little delay when the game starts
 }
 function InitializePlayers(){
 	for(let p = 0; p < IngamePlayers.length; p++)
@@ -1244,7 +1228,7 @@ function InitializePlayers(){
 }
 function InitializePlayer(player,newGame){
 	if(newGame){
-		player.lives = lifeCount;
+		player.lives = Game.lifeCount;
 		player.score = 0;
 		player.statusVisibility = 0;
 		for(let b = 0; b < player.Balls.length; b++)
@@ -1271,7 +1255,7 @@ function InitializePlayer(player,newGame){
 	
 	let spawnPosX = levelPosX; //default for battleMode
 	let spawnPosY = levelPosY; //default for battleMode
-	if(gameMode===GameMode.battle){
+	if(Game.mode===GameMode.battle){
 		let spawnPositions = [];
 		let colWidth = Math.ceil(terrain.canvas.width/8);
 		let colHeight = terrain.canvas.height;
@@ -1294,9 +1278,9 @@ function InitializePlayer(player,newGame){
 			spawnPosY += spawnPositions[randomSpot].y;
 		}
 	}
-	player.playerPosX = (gameMode===GameMode.battle) ? spawnPosX : 0;
-	player.playerPosY = (gameMode===GameMode.battle) ? spawnPosY : 0;
-	player.invulnerability = (gameMode===GameMode.battle) ? invulnerabilityLimit : 0;
+	player.playerPosX = (Game.mode===GameMode.battle) ? spawnPosX : 0;
+	player.playerPosY = (Game.mode===GameMode.battle) ? spawnPosY : 0;
+	player.invulnerability = (Game.mode===GameMode.battle) ? Game.invulnerabilityLimit : 0;
 	
 	ChangeSize(0,player);
 }
@@ -1403,13 +1387,13 @@ function ChargeShot(change, ball){
 	ball.render.drawImage(player.copyCanvas, 0, 0, ball.ballSize, ball.ballSize);
 }
 function PlayerHit(player, enemy){
-	if(gameMode===GameMode.adventure){
+	if(Game.mode===GameMode.adventure){
 		player.pixelCount+=1;
-		if(player.pixelCount>=player.pixelCountMax)
+		if(player.pixelCount >= player.pixelCountMax)
 			ChangeSize(1,player);
 	} else if(player.invulnerability <= 0){
 		player.pixelCount-=2; //enemy shots decrease size at double rate
-		if(player.pixelCount<=0){
+		if(player.pixelCount <= 0){
 			ChangeSize(-1,player);
 			player.pixelCount = player.pixelCountMax;
 			if(player.sizeLevel <= -10){
@@ -1419,20 +1403,20 @@ function PlayerHit(player, enemy){
 					if(!latestBall.isMoving)
 						RemoveShot(latestBall);
 				}
-				if(gameType===GameType.score){
+				if(Game.type===GameType.score){
 					//player.score = Math.max(player.score-1,0);
 					enemy.score++;
-					if(enemy.score>=winScore)
+					if(enemy.score >= Game.winScore)
 						return true;
 					
-					enemy.statusVisibility=statusVisibilityLimit;
+					enemy.statusVisibility = Game.statusVisibilityLimit;
 				} else {
 					player.lives--;
 					if(player.lives<=0){
-						player.score-=IngamePlayers.length-1; //for ranking (4th:-3, 3rd:-2, 2nd:-1, 1st:0)
+						player.score -= IngamePlayers.length-1; //for ranking (4th:-3, 3rd:-2, 2nd:-1, 1st:0)
 						return true;
 					}
-					player.statusVisibility=statusVisibilityLimit;
+					player.statusVisibility = Game.statusVisibilityLimit;
 				}
 				InitializePlayer(player,false);
 			}
@@ -1495,7 +1479,7 @@ function CreateColVectors(ball){
 	ball.Vectors.push([]);
 	let flip = false;
 	let repeatBlock = true;
-	let UpDownFlip = Math.abs(ball.Xdirection)>Math.abs(ball.Ydirection);
+	let UpDownFlip = Math.abs(ball.Xdirection) > Math.abs(ball.Ydirection);
 	let newX=0;
 	let newY=0;
 	let ballNotFull = false;
@@ -1611,13 +1595,13 @@ function BallBallCollision(ball1,ball2){
 				}
 			}
 		} else { //ball-shield
-			for(let i = 0; i < ballVector1.length; i+=updateInterval){
+			for(let i = 0; i < ballVector1.length; i+=Game.updateInterval){
 				let ballBlockY = ball1.ballPosY+ballVector1[i].y;
 				let ballBlockX = ball1.ballPosX+ballVector1[i].x;
 				if(CircleOverlap(ball2X-ballBlockX, ball2Y-ballBlockY, ball2.ballRadius)){
 					ball2.hitCount+=1;
-					if(ball2.hitCount>=ball2.hitLimit){
-						if(gameMode===GameMode.adventure)
+					if(ball2.hitCount >= ball2.hitLimit){
+						if(Game.mode===GameMode.adventure)
 							ChargeShot(1, ball2);
 						else
 							ChargeShot(-1, ball2);
@@ -1627,7 +1611,7 @@ function BallBallCollision(ball1,ball2){
 					SetClipPixel(ball1, ballVector1[i].x, ballVector1[i].y);
 					
 					ballVector1.splice(i,1); //removing empty block
-					i-=updateInterval;
+					i-=Game.updateInterval;
 				}
 			}
 		}
@@ -1640,14 +1624,14 @@ function BallPlayerCollision(ball,player){
 		return false;
 	for(let v = 0; v < ball.Vectors.length; v++){
 		let ballVector = ball.Vectors[v];
-		for(let i = 0; i < ballVector.length; i+=updateInterval){
+		for(let i = 0; i < ballVector.length; i+=Game.updateInterval){
 			let ballBlockY = ball.ballPosY+ballVector[i].y;
 			let ballBlockX = ball.ballPosX+ballVector[i].x;
 			if(CircleOverlap(playerX-ballBlockX, playerY-ballBlockY, player.playerRadius)){
 				SetClipPixel(ball, ballVector[i].x, ballVector[i].y);
 				
 				ballVector.splice(i,1); //removing empty block
-				i-=updateInterval;
+				i-=Game.updateInterval;
 				
 				if(PlayerHit(player, ball.player))
 					return true;
@@ -1657,7 +1641,7 @@ function BallPlayerCollision(ball,player){
 	return false;
 }
 function BallTerrainCollision(ball,ballPosDiff){
-	let blockStep = (ball.firstColCheck) ? updateInterval : 1;
+	let blockStep = (ball.firstColCheck) ? Game.updateInterval : 1;
 	for(let v = 0; v < ball.Vectors.length; v++){
 		let ballVector = ball.Vectors[v];
 		let ballPosStep = 0;
@@ -1675,7 +1659,7 @@ function BallTerrainCollision(ball,ballPosDiff){
 			let outOfBounds = false;
 			let levelPixel = -1;
 			if(levelX < 0 || levelX >= terrain.canvas.width || levelY < 0 || levelY >= terrain.canvas.height){
-				if(!noBounds){
+				if(!Game.noBounds){
 					outOfBounds = true;
 					levelY = Clamp(levelY, 0, terrain.canvas.height-1); //Clamping Y-position in bounds
 					levelX = Clamp(levelX, 0, terrain.canvas.width-1); //Clamping X-position in bounds
@@ -1685,7 +1669,7 @@ function BallTerrainCollision(ball,ballPosDiff){
 				levelPixel = levelY*terrain.canvas.width+levelX;
 			
 			if(GetLevelColData(levelPixel)!==0 || outOfBounds){ //if ball hits level-terrain or is out of bounds
-				if(noPile){
+				if(Game.noPile){
 					SetLevelColData(levelPixel,false);
 					terrain.render.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
 					
@@ -1726,7 +1710,7 @@ function BallTerrainCollision(ball,ballPosDiff){
 	}
 }
 function PlayerTerrainCollision(player){
-	player.onGround=false;
+	player.onGround = false;
 	terrain.ResetCollided();
 	
 	for(let i = 0; i < player.colPoints.length; i++){
@@ -1743,70 +1727,70 @@ function PlayerTerrainCollision(player){
 		
 		if(levelX>=0 && levelX<terrain.canvas.width && levelY>=0 && levelY<terrain.canvas.height) //in bounds
 			levelPixel = levelY*terrain.canvas.width+levelX;
-		else if(!noBounds){ //out of bounds
+		else if(!Game.noBounds){ //out of bounds
 			outOfBounds = true;
-			if(levelX<-player.colMiddle){
-				player.playerPosX-=levelX;
+			if(levelX < -player.colMiddle){
+				player.playerPosX -= levelX;
 				player.momentumX = Math.max(player.momentumX,0);
-			} else if(levelX>=terrain.canvas.width+player.colMiddle){
-				player.playerPosX-=levelX-(terrain.canvas.width-1);
+			} else if(levelX >= terrain.canvas.width+player.colMiddle){
+				player.playerPosX -= levelX-(terrain.canvas.width-1);
 				player.momentumX = Math.min(player.momentumX,0);
-			} if(levelY<-player.colMiddle){
-				player.playerPosY-=levelY;
+			} if(levelY < -player.colMiddle){
+				player.playerPosY -= levelY;
 				player.momentumY = Math.max(player.momentumY,0);
-			} else if(levelY>=terrain.canvas.height+player.colMiddle){
-				player.playerPosY-=levelY-(terrain.canvas.height-1);
+			} else if(levelY >= terrain.canvas.height+player.colMiddle){
+				player.playerPosY -= levelY-(terrain.canvas.height-1);
 				player.momentumY = Math.min(player.momentumY,0);
 			}
 		}
 		if(GetLevelColData(levelPixel)!==0 || outOfBounds){ //if player hits level-terrain
-			if(blockY<player.colMiddle){ //pixels from halfway upwards
-				if(blockY<player.colTop){
+			if(blockY < player.colMiddle){ //pixels from halfway upwards
+				if(blockY < player.colTop){
 					if(player.momentumY<0){
-						player.momentumY = Math.min(player.momentumY+momentumChange*4,0);
+						player.momentumY = Math.min(player.momentumY+Game.momentumChange*4,0);
 						player.onGround = true;
 					}
 					
-					if(!infiniteJump)
-						player.jumpTimer = jumpLimit;
+					if(!Game.infiniteJump)
+						player.jumpTimer = Game.jumpLimit;
 					
-					player.playerPosY += positionCorrection;
+					player.playerPosY += Game.positionCorrection;
 				} else {
-					player.momentumX += (blockX<player.colMiddle) ? momentumChange : -momentumChange;
-					player.momentumY += momentumChange;
+					player.momentumX += (blockX<player.colMiddle) ? Game.momentumChange : -Game.momentumChange;
+					player.momentumY += Game.momentumChange;
 					//alternative
-					//player.momentumX -= (blockX-player.colMiddle)/player.colMiddle*momentumChange;
-					//player.momentumY -= (blockY-player.colMiddle)/player.colMiddle*momentumChange;
+					//player.momentumX -= (blockX-player.colMiddle)/player.colMiddle*Game.momentumChange;
+					//player.momentumY -= (blockY-player.colMiddle)/player.colMiddle*Game.momentumChange;
 				}
 			} else { //pixels from halfway downwards
-				if(blockY>player.colBottom){
+				if(blockY > player.colBottom){
 					player.onGround = true;
 					player.jumpTimer = 0;
 					if(player.momentumY>0)
-						player.momentumY = Math.max(player.momentumY-momentumChange*4,0);
+						player.momentumY = Math.max(player.momentumY-Game.momentumChange*4,0);
 					
 					if(player.momentumX===0)
 						player.rotMomentum = 0;
 					
-					player.playerPosY -= positionCorrection;
+					player.playerPosY -= Game.positionCorrection;
 				} else {
-					if(wallJump && !outOfBounds)
+					if(Game.wallJump && !outOfBounds)
 						player.jumpTimer = 0;
 					
-					player.momentumX += (blockX<player.colMiddle) ? momentumChange : -momentumChange;
-					player.momentumY -= momentumChange;
+					player.momentumX += (blockX<player.colMiddle) ? Game.momentumChange : -Game.momentumChange;
+					player.momentumY -= Game.momentumChange;
 					//alternative (player slows down when going up slopes)
-					//player.momentumX -= (blockX-player.colMiddle)/player.colMiddle*momentumChange;
-					//player.momentumY -= (blockY-player.colMiddle)/player.colMiddle*momentumChange;
+					//player.momentumX -= (blockX-player.colMiddle)/player.colMiddle*Game.momentumChange;
+					//player.momentumY -= (blockY-player.colMiddle)/player.colMiddle*Game.momentumChange;
 				}
 			}
-			if((collectCharge || !player.charging) && !player.chargeHold){ //OR "if((collectCharge && !player.chargeHold) || !player.charging)"?
+			if((Game.collectCharge || !player.charging) && !player.chargeHold){ //OR "if((Game.collectCharge && !player.chargeHold) || !player.charging)"?
 				if(player.rotMomentum!==0 && !outOfBounds){ //can't collect snow without rotating
-					if(!noGrow){
+					if(!Game.noGrow){
 						if(!terrain.collided[player.level]){
 							let xOffset = 0;
 							let yOffset = 0;
-							if(gameMode===GameMode.adventure){
+							if(Game.mode===GameMode.adventure){
 								xOffset = Levels[player.level].xOffset;
 								yOffset = Levels[player.level].yOffset;
 							}
@@ -1815,12 +1799,12 @@ function PlayerTerrainCollision(player){
 							Math.floor(levelPosY-player.playerPosY+yOffset)); //yOffset is always 0 in battleMode
 							terrain.collided[player.level] = true;
 						}
-						player.pixelCount += Math.ceil(speedMultiplier/2); //collects snow faster
+						player.pixelCount += Math.ceil(Game.speedMultiplier/2); //collects snow faster
 						snowRate = SnowRate(1.002,0.05);
-						if(player.pixelCount>=player.pixelCountMax) //how many pixels needs to be collected before growth
+						if(player.pixelCount >= player.pixelCountMax) //how many pixels needs to be collected before growth
 							ChangeSize(1,player);
 					}
-					if(!noCollect){
+					if(!Game.noCollect){
 						terrain.render.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
 						SetLevelColData(levelPixel,false); //alternative: terrain.colData[terrainPixelIndex] &= ~terrainPixelMask;
 					}
@@ -1833,7 +1817,7 @@ function CheckPlayerInsideTerrain(player,posDiffX,posDiffY){
 	let posDiffSum = Math.hypot(posDiffX,posDiffY);
 	let playerPosDiff = Math.floor(posDiffSum);
 	
-	if(playerPosDiff<=maxSpeed) //speed threshold (using maxSpeed because maxDropSpeed is too high)
+	if(playerPosDiff <= Game.maxSpeed) //speed threshold (using maxSpeed because maxDropSpeed is too high)
 		return;
 	
 	let posDirX = posDiffX/posDiffSum;
@@ -1853,7 +1837,7 @@ function CheckPlayerInsideTerrain(player,posDiffX,posDiffY){
 		
 		if(levelX>=0 && levelX<terrain.canvas.width && levelY>=0 && levelY<terrain.canvas.height) //in bounds
 			levelPixel = levelY*terrain.canvas.width+levelX;
-		else if(!noBounds) //out of bounds
+		else if(!Game.noBounds) //out of bounds
 			outOfBounds = true;
 		
 		if(GetLevelColData(levelPixel)===0 && !outOfBounds)
@@ -1867,53 +1851,53 @@ function CheckPlayerInsideTerrain(player,posDiffX,posDiffY){
 	}
 }
 function GameLogic(){
-for(let step = steps; step >= 1; step--){
+for(let step = Game.steps; step >= 1; step--){
 	for(let p = 0; p < IngamePlayers.length; p++){
 		let player = IngamePlayers[p];
 		
 		if(player.left){
-			if(noClip)
-				player.playerPosX -= maxSpeed*player.leftValue;
-			else if(player.momentumX > -maxSpeed*player.leftValue) //can go faster with knockBack
-				player.momentumX = Math.max(player.momentumX-acceleration,-maxSpeed*player.leftValue);
+			if(Game.noClip)
+				player.playerPosX -= Game.maxSpeed*player.leftValue;
+			else if(player.momentumX > -Game.maxSpeed*player.leftValue) //can go faster with knockBack
+				player.momentumX = Math.max(player.momentumX-Game.acceleration,-Game.maxSpeed*player.leftValue);
 		} else if(player.right){
-			if(noClip)
-				player.playerPosX += maxSpeed*player.rightValue;
-			else if(player.momentumX < maxSpeed*player.rightValue) //can go faster with knockBack
-				player.momentumX = Math.min(player.momentumX+acceleration,maxSpeed*player.rightValue);
+			if(Game.noClip)
+				player.playerPosX += Game.maxSpeed*player.rightValue;
+			else if(player.momentumX < Game.maxSpeed*player.rightValue) //can go faster with knockBack
+				player.momentumX = Math.min(player.momentumX+Game.acceleration,Game.maxSpeed*player.rightValue);
 		}
 		if(player.jump){
-			if(player.momentumY>jumpForce){
-				if(!infiniteJump){
-					player.jumpTimer+=speedMultiplier; //or +=updateInterval?
-					if(player.jumpTimer>=jumpLimit){
-						if(!wallJump)
+			if(player.momentumY > Game.jumpForce){
+				if(!Game.infiniteJump){
+					player.jumpTimer += Game.speedMultiplier; //or +=Game.updateInterval?
+					if(player.jumpTimer >= Game.jumpLimit){
+						if(!Game.wallJump)
 							player.jump = false;
-						player.jumpTimer=jumpLimit;
+						player.jumpTimer = Game.jumpLimit;
 					}
 				} else
-					player.jumpTimer=0;
+					player.jumpTimer = 0;
 				
-				if(player.jumpTimer<jumpLimit)
-					player.momentumY = jumpForce;
+				if(player.jumpTimer < Game.jumpLimit)
+					player.momentumY = Game.jumpForce;
 			}
 		}
 		if(player.onGround){
 			if(player.momentumX < 0)
-				player.momentumX = Math.min(player.momentumX+friction,0);
+				player.momentumX = Math.min(player.momentumX+Game.friction,0);
 			else if(player.momentumX > 0)
-				player.momentumX = Math.max(player.momentumX-friction,0);
+				player.momentumX = Math.max(player.momentumX-Game.friction,0);
 		}
 		if(player.invulnerability > 0)
-			player.invulnerability-=speedMultiplier; //or -=updateInterval (so gameSpeed doesn't affect time)
+			player.invulnerability -= Game.speedMultiplier; //or -=Game.updateInterval (so gameSpeed doesn't affect time)
 		if(player.statusVisibility > 0)
-			player.statusVisibility-=speedMultiplier; //or -=updateInterval (so gameSpeed doesn't affect time)
+			player.statusVisibility -= Game.speedMultiplier; //or -=Game.updateInterval (so gameSpeed doesn't affect time)
 		if(player.up){
-			if(noClip)
-				player.playerPosY -= maxSpeed*player.upValue;
+			if(Game.noClip)
+				player.playerPosY -= Game.maxSpeed*player.upValue;
 		} else if(player.down){
-			if(noClip)
-				player.playerPosY += maxSpeed*player.downValue;
+			if(Game.noClip)
+				player.playerPosY += Game.maxSpeed*player.downValue;
 		}
 		let ball = (player.Balls.length > 0) ? player.Balls[player.Balls.length-1] : null;
 		if(player.charging){
@@ -1921,16 +1905,16 @@ for(let step = steps; step >= 1; step--){
 				if(ball === null || ball.isMoving)
 					ball = CreateShot(player);
 				
-				if(instantCharge){
+				if(Game.instantCharge){
 					ChargeShot(player.sizeLevel/2, ball);
 					ChangeSize(-player.sizeLevel/2, player);
 				} else {
-					player.chargeCount+=player.chargeValue*speedMultiplier; //or *updateInterval?
-					let chargeAmount = Math.floor(Math.min(player.chargeCount/chargeInterval,player.sizeLevel/2));
+					player.chargeCount += player.chargeValue*Game.speedMultiplier; //or *Game.updateInterval?
+					let chargeAmount = Math.floor(Math.min(player.chargeCount/Game.chargeInterval,player.sizeLevel/2));
 					if(chargeAmount>=1){
 						ChargeShot(chargeAmount, ball);
 						ChangeSize(-chargeAmount, player);
-						player.chargeCount -= chargeAmount*chargeInterval;
+						player.chargeCount -= chargeAmount*Game.chargeInterval;
 					}
 				}
 				LoopSound(player.Sounds.charge,player.chargeValue);
@@ -1939,22 +1923,22 @@ for(let step = steps; step >= 1; step--){
 			if(ball !== null && !ball.isMoving){
 				//calculating the aiming direction
 				if(!player.aimCentered){
-					ball.Xdirection=player.aimX-player.playerPosX-player.playerRadius;
-					ball.Ydirection=player.aimY-player.playerPosY-player.playerRadius;
+					ball.Xdirection = player.aimX-player.playerPosX-player.playerRadius;
+					ball.Ydirection = player.aimY-player.playerPosY-player.playerRadius;
 				} else { //drag ball behind the player
-					ball.Xdirection=-player.momentumX;
-					if(Math.abs(player.momentumY)>momentumThreshold*20)
-						ball.Ydirection=-player.momentumY;
+					ball.Xdirection = -player.momentumX;
+					if(Math.abs(player.momentumY) > Game.momentumThreshold*20)
+						ball.Ydirection = -player.momentumY;
 					else
-						ball.Ydirection=Math.abs(player.momentumY); //shoots downwards
+						ball.Ydirection = Math.abs(player.momentumY); //shoots downwards
 				}
-				let positionSum=Math.hypot(ball.Xdirection,ball.Ydirection);
+				let positionSum = Math.hypot(ball.Xdirection,ball.Ydirection);
 				if(positionSum>0){
-					ball.Xdirection=ball.Xdirection/positionSum;
-					ball.Ydirection=ball.Ydirection/positionSum;
+					ball.Xdirection = ball.Xdirection/positionSum;
+					ball.Ydirection = ball.Ydirection/positionSum;
 				} else {
-					ball.Xdirection=0;
-					ball.Ydirection=1; //shoots downwards as a failsafe
+					ball.Xdirection = 0;
+					ball.Ydirection = 1; //shoots downwards as a failsafe
 				}
 			}
 		} else if(ball !== null && !ball.isMoving){
@@ -1963,8 +1947,8 @@ for(let step = steps; step >= 1; step--){
 			if(ball.ballSize>0){
 				CreateColVectors(ball);
 				
-				if(!noKnockback){
-					let knockBackStrength = ball.ballSize*knockBackForce*(shotSpeed*shotSpeed/25);
+				if(!Game.noKnockback){
+					let knockBackStrength = ball.ballSize*Game.knockBackForce*(Game.shotSpeed*Game.shotSpeed/25);
 					player.momentumX -= ball.Xdirection*knockBackStrength;
 					player.momentumY -= ball.Ydirection*knockBackStrength;
 				}
@@ -1975,10 +1959,10 @@ for(let step = steps; step >= 1; step--){
 			}
 		}
 		if(!player.onGround){
-			if(player.momentumY<maxDropSpeed) //can drop faster with knockBack
-				player.momentumY = Math.min(player.momentumY+dropAcceleration,maxDropSpeed);
+			if(player.momentumY < Game.maxDropSpeed) //can drop faster with knockBack
+				player.momentumY = Math.min(player.momentumY+Game.dropAcceleration,Game.maxDropSpeed);
 		}
-		if(!noClip){
+		if(!Game.noClip){
 			let prevPlayerPosX = player.playerPosX;
 			let prevPlayerPosY = player.playerPosY;
 			
@@ -1989,7 +1973,7 @@ for(let step = steps; step >= 1; step--){
 			
 			PlayerTerrainCollision(player);
 		} else {
-			if(gameMode===GameMode.adventure) //update player.level even in noClip
+			if(Game.mode===GameMode.adventure) //update player.level even in noClip
 				player.level = FindLevel(player.level,Math.floor(player.playerPosX-levelPosX+player.colMiddle),Math.floor(player.playerPosY-levelPosY+player.colMiddle));
 			
 			player.momentumX = 0;
@@ -1999,7 +1983,7 @@ for(let step = steps; step >= 1; step--){
 		}
 		if(player.momentumX!==0 || player.rotMomentum!==0){ //rotation render
 			if(player.onGround){
-				if(Math.abs(player.momentumX)<momentumThreshold)
+				if(Math.abs(player.momentumX) < Game.momentumThreshold)
 					player.rotMomentum = 0;
 				else {
 					player.rotMomentum = player.momentumX;
@@ -2007,8 +1991,8 @@ for(let step = steps; step >= 1; step--){
 				}
 			} else {
 				if(player.rotMomentum!==0)
-					player.rotMomentum -= Math.sign(player.rotMomentum)*momentumChange;
-				if(Math.abs(player.rotMomentum)<momentumThreshold)
+					player.rotMomentum -= Math.sign(player.rotMomentum)*Game.momentumChange;
+				if(Math.abs(player.rotMomentum) < Game.momentumThreshold)
 					player.rotMomentum = 0;
 			}
 			if(player.rotMomentum!==0){
@@ -2038,8 +2022,8 @@ for(let step = steps; step >= 1; step--){
 			let prevBallPosX = ball.ballPosX;
 			let prevBallPosY = ball.ballPosY;
 			
-			ball.ballPosX+=ball.Xdirection*(ballSpeed*(shotSpeed*shotSpeed/25));
-			ball.ballPosY+=ball.Ydirection*(ballSpeed*(shotSpeed*shotSpeed/25));
+			ball.ballPosX += ball.Xdirection*(Game.ballSpeed*(Game.shotSpeed*Game.shotSpeed/25));
+			ball.ballPosY += ball.Ydirection*(Game.ballSpeed*(Game.shotSpeed*Game.shotSpeed/25));
 			
 			let ballPosDiff = Math.ceil(Math.hypot(ball.ballPosX-prevBallPosX,ball.ballPosY-prevBallPosY))+1;
 			
@@ -2057,7 +2041,7 @@ for(let step = steps; step >= 1; step--){
 					continue;
 				
 				if(BallPlayerCollision(ball,otherPlayer)){ //if GameOver or player dies
-					if(gameType===GameType.score){
+					if(Game.type===GameType.score){
 						Results();
 						return;
 					}
@@ -2068,7 +2052,7 @@ for(let step = steps; step >= 1; step--){
 						return;
 					}
 				}
-				if(!noPile)
+				if(!Game.noPile)
 					for(let b2 = 0; b2 < otherPlayer.Balls.length; b2++)
 						BallBallCollision(ball,otherPlayer.Balls[b2]);
 			}
@@ -2078,12 +2062,12 @@ for(let step = steps; step >= 1; step--){
 			ball.firstColCheck = false;
 			if(ball.collided){
 				snowRate = SnowRate(1.02,0.5);
-				let collidedLength = gameMode===GameMode.adventure ? terrain.collided.length : 1;
+				let collidedLength = Game.mode===GameMode.adventure ? terrain.collided.length : 1;
 				for(let l = 0; l < collidedLength; l++){
 					if(terrain.collided[l]){
 						let xOffset = 0;
 						let yOffset = 0;
-						if(gameMode===GameMode.adventure){
+						if(Game.mode===GameMode.adventure){
 							xOffset = Levels[l].xOffset;
 							yOffset = Levels[l].yOffset;
 							terrain.render = Levels[l].render;
@@ -2114,11 +2098,11 @@ for(let step = steps; step >= 1; step--){
 }
 	LoopSound(Sounds.snow,snowRate);
 	
-	if(fixedCamera){
+	if(Game.fixedCamera){
 		let xOffset = 0;
 		let yOffset = 0;
 		let areaCanvas = terrain.canvas;
-		if(gameMode===GameMode.adventure){
+		if(Game.mode===GameMode.adventure){
 			let l = Players[firstJoined].level;
 			xOffset = Levels[l].xOffset;
 			yOffset = Levels[l].yOffset;
@@ -2159,13 +2143,13 @@ for(let step = steps; step >= 1; step--){
 		}
 		/*if(!noCameraBounds){
 			areaScale = Math.min(screenWidth,screenHeight)/(Math.min(terrain.canvas.width,terrain.canvas.height)/2);
-			let newAreaScale1 = (screenWidth*aimMargin)/Math.min((maxX-minX),terrain.canvas.width*aimMargin);
-			let newAreaScale2 = (screenHeight*aimMargin)/Math.min((maxY-minY),terrain.canvas.height*aimMargin);
+			let newAreaScale1 = (screenWidth*Game.aimMargin)/Math.min((maxX-minX),terrain.canvas.width*Game.aimMargin);
+			let newAreaScale2 = (screenHeight*Game.aimMargin)/Math.min((maxY-minY),terrain.canvas.height*Game.aimMargin);
 			areaScale = Math.min(areaScale,newAreaScale1,newAreaScale2);
 		} else {*/
-		areaScale = Math.min(screenWidth,screenHeight)/aimArea;
-		let newAreaScale1 = (screenWidth*aimMargin)/(maxX-minX);
-		let newAreaScale2 = (screenHeight*aimMargin)/(maxY-minY);
+		areaScale = Math.min(screenWidth,screenHeight)/Game.aimArea;
+		let newAreaScale1 = (screenWidth*Game.aimMargin)/(maxX-minX);
+		let newAreaScale2 = (screenHeight*Game.aimMargin)/(maxY-minY);
 		areaScale = Math.min(areaScale,newAreaScale1,newAreaScale2);
 		
 		let playersCenterX = (minX+maxX)/2;
@@ -2214,18 +2198,18 @@ for(let step = steps; step >= 1; step--){
 		if(player.Balls.length > 0){
 			let ball = player.Balls[player.Balls.length-1];
 			if(!ball.isMoving){
-				ball.ballPosX=player.playerPosX+player.playerRadius+(ball.Xdirection*(ball.ballRadius+player.playerRadius))-ball.ballRadius;
-				ball.ballPosY=player.playerPosY+player.playerRadius+(ball.Ydirection*(ball.ballRadius+player.playerRadius))-ball.ballRadius;
+				ball.ballPosX = player.playerPosX+player.playerRadius+(ball.Xdirection*(ball.ballRadius+player.playerRadius))-ball.ballRadius;
+				ball.ballPosY = player.playerPosY+player.playerRadius+(ball.Ydirection*(ball.ballRadius+player.playerRadius))-ball.ballRadius;
 			}
 		}
 	}
 	//Rendering everything
-	if(!noBounds){
+	if(!Game.noBounds){
 		gameRender.fillStyle = "#00000020"; //Out of bounds area color
 		gameRender.fillRect(0, 0, screenWidth, screenHeight); //Out of bounds area
 	}
 	
-	if(gameMode===GameMode.adventure){
+	if(Game.mode===GameMode.adventure){
 		for(let l = 0; l < Levels.length; l++){ //floor(pos) and ceil(size) prevent vertical lines (Out of bounds area color)
 			let scaledLevelPosX = Math.floor((levelPosX+Levels[l].xOffset)*areaScale), scaledLevelPosY = Math.floor((levelPosY+Levels[l].yOffset)*areaScale);
 			let scaledLevelWidth = Math.ceil(Levels[l].canvas.width*areaScale), scaledLevelHeight = Math.ceil(Levels[l].canvas.height*areaScale);
@@ -2243,7 +2227,7 @@ for(let step = steps; step >= 1; step--){
 	}
 	
 	if(IngamePlayers.length>1){
-		gameRender.lineWidth = 3*guiScale;
+		gameRender.lineWidth = 3*Game.guiScale;
 		gameRender.setLineDash([]);
 	}
 	for(let p = 0; p < IngamePlayers.length; p++){
@@ -2255,7 +2239,7 @@ for(let step = steps; step >= 1; step--){
 		if(IngamePlayers.length>1){
 			gameRender.beginPath();
 			gameRender.arc((player.playerPosX+player.playerRadius)*areaScale,(player.playerPosY+player.playerRadius)*areaScale,(player.playerRadius)*areaScale,0,2*Math.PI);
-			gameRender.strokeStyle=PlayerColors[player.number].color;
+			gameRender.strokeStyle = PlayerColors[player.number].color;
 			gameRender.stroke();
 		}
 		gameRender.globalAlpha = 1;
@@ -2268,8 +2252,8 @@ for(let step = steps; step >= 1; step--){
 		for(let b = 0; b < player.Balls.length; b++)
 			gameRender.drawImage(player.Balls[b].canvas,0,0,player.Balls[b].canvas.width,player.Balls[b].canvas.height,player.Balls[b].ballPosX*areaScale,player.Balls[b].ballPosY*areaScale,player.Balls[b].canvas.width*areaScale,player.Balls[b].canvas.height*areaScale);
 	}
-	gameRender.lineWidth = 3*guiScale;
-	gameRender.setLineDash([5*guiScale,10*guiScale]);
+	gameRender.lineWidth = 3*Game.guiScale;
+	gameRender.setLineDash([5*Game.guiScale,10*Game.guiScale]);
 	for(let p = 0; p < IngamePlayers.length; p++){
 		let player = IngamePlayers[p];
 		
@@ -2277,23 +2261,23 @@ for(let step = steps; step >= 1; step--){
 			gameRender.beginPath();
 			gameRender.moveTo((player.playerPosX+player.playerRadius)*areaScale,(player.playerPosY+player.playerRadius)*areaScale);
 			gameRender.lineTo(player.aimX*areaScale,player.aimY*areaScale);
-			gameRender.strokeStyle=PlayerColors[player.number].color;
+			gameRender.strokeStyle = PlayerColors[player.number].color;
 			gameRender.stroke();
 			let crossOffsetX = Crosshair[player.number].xOffset;
 			let crossOffsetY = Crosshair[player.number].yOffset;
-			gameRender.drawImage(Crosshair[player.number],0,0,crossOffsetX*2,crossOffsetY*2,(player.aimX*areaScale)-crossOffsetX*guiScale,(player.aimY*areaScale)-crossOffsetY*guiScale,crossOffsetX*2*guiScale,crossOffsetY*2*guiScale); //crosshair scales with resolution
+			gameRender.drawImage(Crosshair[player.number],0,0,crossOffsetX*2,crossOffsetY*2,(player.aimX*areaScale)-crossOffsetX*Game.guiScale,(player.aimY*areaScale)-crossOffsetY*Game.guiScale,crossOffsetX*2*Game.guiScale,crossOffsetY*2*Game.guiScale); //crosshair scales with resolution
 			//gameRender.drawImage(Crosshair[player.number],(player.aimX*areaScale)-crossOffsetX,(player.aimY*areaScale)-crossOffsetY); //crosshair does not scale with resolution
 		}
 	}
-	if(gameMode===GameMode.battle){
+	if(Game.mode===GameMode.battle){
 		for(let p = 0; p < IngamePlayers.length; p++){
 			let player = IngamePlayers[p];
 			
 			if(player.statusVisibility > 0){
-				gameRender.fillStyle=PlayerColors[player.number].color;
-				gameRender.font=Math.max(player.playerHeight*areaScale,30)+"px Arial";
-				gameRender.textAlign="center";
-				gameRender.fillText(((gameType===GameType.score) ? player.score : player.lives),(player.playerPosX+player.playerRadius)*areaScale,player.playerPosY*areaScale);
+				gameRender.fillStyle = PlayerColors[player.number].color;
+				gameRender.font = Math.max(player.playerHeight*areaScale,30)+"px Arial";
+				gameRender.textAlign = "center";
+				gameRender.fillText(((Game.type===GameType.score) ? player.score : player.lives),(player.playerPosX+player.playerRadius)*areaScale,player.playerPosY*areaScale);
 			}
 		}
 	}
@@ -3039,8 +3023,8 @@ function AddDefaultProperties(element, elementType, parent, menu=null){ //elemen
 		}
 		if(element.type==="checkbox" || element.type==="adjustbox"){
 			Object.defineProperty(element,"value",{
-				get: new Function("return "+element.name+";"),
-				set: new Function("v",element.name+"=v;")
+				get: function(){return Game[element.name];},
+				set: function(v){Game[element.name] = v;}
 			});
 		}
 	} else
@@ -3442,18 +3426,18 @@ function SetAdjustBox(menu,option,change){
 	let oldValue = option.value;
 	if(menu===GUI.battle){
 		if(option===GUI.battle.adjustbox[0]){
-			winScore = Clamp(winScore+change, 1, 100);
+			Game.winScore = Clamp(Game.winScore+change, 1, 100);
 		} else if(option===GUI.battle.adjustbox[1]){
-			lifeCount = Clamp(lifeCount+change, 1, 100);
+			Game.lifeCount = Clamp(Game.lifeCount+change, 1, 100);
 		} else if(option===GUI.battle.adjustbox[2]){
-			shotSpeed = Clamp(shotSpeed+change, 1, 5);
+			Game.shotSpeed = Clamp(Game.shotSpeed+change, 1, 5);
 		}
 	} else if(menu===GUI.options){
 		if(option===GUI.options.adjustbox[0]){
-			updateInterval = Clamp(updateInterval-change, 1, 5);
-			UpdateMultiplier(updateInterval);
+			Game.updateInterval = Clamp(Game.updateInterval-change, 1, 5);
+			UpdateMultiplier(Game.updateInterval);
 		} else if(option===GUI.options.adjustbox[1]){
-			soundVolume = Clamp(soundVolume+change*0.01, 0, 1);
+			Game.soundVolume = Clamp(Game.soundVolume+change*0.01, 0, 1);
 		}
 	}
 	if(oldValue!==option.value)
@@ -3499,7 +3483,7 @@ function MainMenu(){
 }
 function Adventure(){
 	if(activeSubmenu!==GUI.adventure){
-		gameMode=GameMode.adventure;
+		Game.mode=GameMode.adventure;
 		activeSubmenu = GUI.adventure;
 		selectedOption = GUI.adventure.button[0];
 		playerConfirm = true;
@@ -3533,7 +3517,7 @@ function Adventure(){
 }
 function Battle(){
 	if(activeSubmenu!==GUI.battle){
-		gameMode=GameMode.battle;
+		Game.mode=GameMode.battle;
 		activeSubmenu = GUI.battle;
 		selectedOption = GUI.battle.dropdown[0];
 		playerConfirm = true;
@@ -3576,7 +3560,7 @@ function Battle(){
 			}
 		} else if(activeOption===GUI.battle.dropdown[0]){
 			if(selectedOption!==cancel)
-				gameType = activeOption.selectedItem;
+				Game.type = activeOption.selectedItem;
 			HideMenu(activeOption);
 		} else {
 			selectedOption = activeOption;
@@ -3590,11 +3574,11 @@ function Battle(){
 		if(playerConfirm)
 			PlayerConfirmWindow();
 		else {
-			GUI.battle.dropdown[0].activeItem = gameType;
-			GUI.battle.adjustbox[0].guiState = (gameType===GameType.score) ? GUIstate.Enabled : GUIstate.Hidden;
-			GUI.battle.adjustbox[1].guiState = (gameType===GameType.life) ? GUIstate.Enabled : GUIstate.Hidden;
-			GUI.battle.label[2].guiState = (gameType===GameType.score) ? GUIstate.Enabled : GUIstate.Hidden;
-			GUI.battle.label[3].guiState = (gameType===GameType.life) ? GUIstate.Enabled : GUIstate.Hidden;
+			GUI.battle.dropdown[0].activeItem = Game.type;
+			GUI.battle.adjustbox[0].guiState = (Game.type===GameType.score) ? GUIstate.Enabled : GUIstate.Hidden;
+			GUI.battle.adjustbox[1].guiState = (Game.type===GameType.life) ? GUIstate.Enabled : GUIstate.Hidden;
+			GUI.battle.label[2].guiState = (Game.type===GameType.score) ? GUIstate.Enabled : GUIstate.Hidden;
+			GUI.battle.label[3].guiState = (Game.type===GameType.life) ? GUIstate.Enabled : GUIstate.Hidden;
 			
 			for(let i = 0; i < GUI.battle.adjustbox.length; i++)
 				SetAdjustNumber(GUI.battle.adjustbox[i], GUI.battle.adjustbox[i].value);
@@ -3606,8 +3590,8 @@ function Battle(){
 			
 			let bgElement = GUI.battle.background[0];
 			
-			tempCanvas.width = bgElement.width*guiScale; //guiScale keeps stageIcons sharp in high screen resolutions
-			tempCanvas.height = bgElement.height*guiScale;
+			tempCanvas.width = bgElement.width*Game.guiScale; //Game.guiScale keeps stageIcons sharp in high screen resolutions
+			tempCanvas.height = bgElement.height*Game.guiScale;
 			
 			if(!menuAnimating)
 				stageRowStep = AnimateValue(stageRowStep,stageRow);
@@ -3637,12 +3621,12 @@ function Battle(){
 					let iconPosY = bgPosY+(iconBgHeight-iconHeight)/2;
 					
 					tempRender.fillStyle=(selectedOption===guiElement) ? optionBorderHighlightColor : optionBorderColor;
-					tempRender.fillRect(bgPosX*guiScale,bgPosY*guiScale,iconBgWidth*guiScale,iconBgHeight*guiScale);
+					tempRender.fillRect(bgPosX*Game.guiScale,bgPosY*Game.guiScale,iconBgWidth*Game.guiScale,iconBgHeight*Game.guiScale);
 					
 					tempRender.fillStyle="#000000";
-					tempRender.fillRect(iconPosX*guiScale,iconPosY*guiScale,iconWidth*guiScale,iconHeight*guiScale);
+					tempRender.fillRect(iconPosX*Game.guiScale,iconPosY*Game.guiScale,iconWidth*Game.guiScale,iconHeight*Game.guiScale);
 					
-					tempRender.drawImage(Stages[i],iconPosX*guiScale,iconPosY*guiScale,iconWidth*guiScale,iconHeight*guiScale);
+					tempRender.drawImage(Stages[i],iconPosX*Game.guiScale,iconPosY*Game.guiScale,iconWidth*Game.guiScale,iconHeight*Game.guiScale);
 				}
 			}
 			
@@ -3722,8 +3706,8 @@ function Options(){
 		for(let i = 0; i < GUI.options.label.length; i++)
 			GUI.options.label[i].guiState = (Players[activePlayer].inputMethod!==-1 || i<4) ? GUIstate.Enabled : GUIstate.Disabled;
 		
-		SetAdjustNumber(GUI.options.adjustbox[0], Math.floor((6-updateInterval)*20));
-		SetAdjustNumber(GUI.options.adjustbox[1], Math.round(soundVolume*100));
+		SetAdjustNumber(GUI.options.adjustbox[0], Math.floor((6-Game.updateInterval)*20));
+		SetAdjustNumber(GUI.options.adjustbox[1], Math.round(Game.soundVolume*100));
 		
 		for(let i = 0; i < GUI.options.checkbox.length; i++)
 			GUI.options.checkbox[i].data = (GUI.options.checkbox[i].value) ? Enable : Disable;
@@ -3792,9 +3776,9 @@ function Options(){
 	}
 }
 function Pause(){
-	if(!pause){
+	if(!Game.pause){
 		StopAllSounds();
-		pause=true;
+		Game.pause = true;
 		activeMenu = GUI.pause;
 		selectedOption = GUI.pause.button[0];
 	}
@@ -3805,7 +3789,7 @@ function Pause(){
 			GUI[selectedOption.menu].run();
 		} else if(selectedOption===GUI.pause.button[0] || selectedOption===cancel){
 			CloseAllMenus();
-			pause=false;
+			Game.pause = false;
 		}
 	}
 	
@@ -3821,8 +3805,8 @@ function ExitGame(){
 		activeSubmenu = GUI.exitGame;
 		selectedOption = GUI.exitGame.button[0];
 		
-		GUI.exitGame.label[0].guiState = (gameMode===GameMode.adventure) ? GUIstate.Enabled : GUIstate.Hidden;
-		GUI.exitGame.label[1].guiState = (gameMode===GameMode.battle) ? GUIstate.Enabled : GUIstate.Hidden;
+		GUI.exitGame.label[0].guiState = (Game.mode===GameMode.adventure) ? GUIstate.Enabled : GUIstate.Hidden;
+		GUI.exitGame.label[1].guiState = (Game.mode===GameMode.battle) ? GUIstate.Enabled : GUIstate.Hidden;
 		
 		GUI.exitGame.title.yDiff=GUI.exitGame.title.orgYdiff;
 		GUI.exitGame.title.xDiff=GUI.exitGame.title.orgXdiff;
@@ -3833,15 +3817,15 @@ function ExitGame(){
 		if(selectedOption===cancel || selectedOption.cancel)
 			HideMenu(GUI.exitGame.title);
 		else if(selectedOption===GUI.exitGame.button[1]){
-			gameStarted=false;
+			Game.started = false;
 			activeMenu = GUI.main;
-			if(gameMode===GameMode.adventure){
+			if(Game.mode===GameMode.adventure){
 				activeSubmenu = null;
 				selectedOption = GUI.main.button[0];
 			} else {
 				activeSubmenu = GUI.battle;
 				lastOption = GUI.main.button[1];
-				selectedOption = GUI.battle.stagebutton[levelIndex];
+				selectedOption = GUI.battle.stagebutton[Game.levelIndex];
 				ShowMenu(GUI.battle.title);
 			}
 		}
@@ -3856,8 +3840,8 @@ function Results(){
 	if(activeMenu!==GUI.results){
 		StopAllSounds();
 		PlaySound(Sounds.death);
-		pause=true;
-		gameStarted=false;
+		Game.pause = true;
+		Game.started = false;
 		activeMenu = GUI.results;
 		selectedOption = GUI.results.button[0];
 		
@@ -3925,13 +3909,13 @@ function Results(){
 			if(GUI[selectedOption.menu]===GUI.battle){
 				activeSubmenu = GUI.battle;
 				lastOption = GUI.main.button[1];
-				selectedOption = GUI.battle.stagebutton[levelIndex];
+				selectedOption = GUI.battle.stagebutton[Game.levelIndex];
 				ShowMenu(GUI.battle.title);
 			} else //mainMenu
 				selectedOption = GUI.main.button[1];
 		} else if(selectedOption===GUI.results.button[0]){
 			CloseAllMenus();
-			InitializeGame(levelIndex);
+			InitializeGame(Game.levelIndex);
 		}
 	}
 	
@@ -4163,13 +4147,13 @@ function RenderMenu(element){
 	
 	RenderText(element);
 }
-function AnimateValue(current,target,animThreshold=0,animSteps={steps:steps}){ //animSteps for multiple chained animations
+function AnimateValue(current,target,animThreshold=0,animSteps={steps:Game.steps}){ //animSteps for multiple chained animations
 	if(current===target)
 		return current;
 	
 	let animDistance = target-current;
-	let multipliedAnimForce = animForce*speedMultiplier;
-	let multipliedAnimThreshold = animThreshold*speedMultiplier;
+	let multipliedAnimForce = animForce*Game.speedMultiplier;
+	let multipliedAnimThreshold = animThreshold*Game.speedMultiplier;
 	
 	while(animSteps.steps >= 1){
 		animSteps.steps--;
@@ -4187,7 +4171,7 @@ function AnimateValue(current,target,animThreshold=0,animSteps={steps:steps}){ /
 }
 function AnimateElement(element,animProperties){
 	let animationDone = true;
-	let animSteps = {steps:steps};
+	let animSteps = {steps:Game.steps};
 	for(let ap = 0; ap < animProperties.length; ap++){
 		let prop = animProperties[ap][0];
 		let target = animProperties[ap][1];
@@ -4200,7 +4184,7 @@ function AnimateElement(element,animProperties){
 				break;
 		}
 		if(GUI.logo.secret)
-			animSteps.steps = steps;
+			animSteps.steps = Game.steps;
 	}
 	return animationDone;
 }
@@ -4321,8 +4305,15 @@ function DebugInfo(){
 	let xPos=4, yPos=20, yStep=20;
 	guiRender.textAlign="left";
 	
-	if(gameStarted && activeMenu===null){
-		guiRender.fillText("Level: X:"+levelPosX.toFixed(1)+"  Y:"+levelPosY.toFixed(1)+"  Width:"+terrain.canvas.width+"  Height:"+terrain.canvas.height+"  [I/K|J/L]AreaScale: "+areaScale.toFixed(4)+((fixedCamera) ? "(fixed)" : "("+1*aimArea.toFixed(2)+"|"+1*aimMargin.toFixed(4)+")"),xPos,yPos);
+	if(Game.started && activeMenu===null){
+		guiRender.fillText(
+			"Level: X:"+levelPosX.toFixed(1)+
+			"  Y:"+levelPosY.toFixed(1)+
+			"  Width:"+terrain.canvas.width+
+			"  Height:"+terrain.canvas.height+
+			"  [I/K|J/L]AreaScale: "+areaScale.toFixed(4)+
+			((Game.fixedCamera) ? "(fixed)" : "("+1*Game.aimArea.toFixed(2)+"|"+1*Game.aimMargin.toFixed(4)+")"),
+			xPos,yPos);
 		
 		let pCount = 0;
 		for(let p = 1; p < Players.length; p++){
@@ -4346,25 +4337,25 @@ function DebugInfo(){
 	
 	xPos = scaledWidth-4; yPos = 20;
 	guiRender.textAlign="right";
-	guiRender.fillText("[N/M]pixelScale: "+pixelScale+"%("+pixelRatio+") [X]guiScale: "+guiScale.toFixed(4)+" [Z]smooth: "+imageSmooth+" [C]noClear: "+noClear+" [V]vsync: "+vsync,xPos,yPos+=yStep);
-	guiRender.fillText("[Home/End]UpdateInterval: "+updateInterval+"ms",xPos,yPos+=yStep);
-	guiRender.fillText("[PgUp/PgDn]SpeedMultiplier: "+speedMultiplier+"x",xPos,yPos+=yStep);
-	guiRender.fillText("Mode: "+Object.keys(GameMode)[gameMode]+" Type: "+Object.keys(GameType)[gameType],xPos,yPos+=yStep);
+	guiRender.fillText("[N/M]pixelScale: "+Game.pixelScale+"%("+pixelRatio+") [X]guiScale: "+Game.guiScale.toFixed(4)+" [Z]smooth: "+Game.imageSmooth+" [C]noClear: "+Game.noClear+" [V]vsync: "+Game.vsync,xPos,yPos+=yStep);
+	guiRender.fillText("[Home/End]UpdateInterval: "+Game.updateInterval+"ms",xPos,yPos+=yStep);
+	guiRender.fillText("[PgUp/PgDn]SpeedMultiplier: "+Game.speedMultiplier+"x",xPos,yPos+=yStep);
+	guiRender.fillText("Mode: "+Object.keys(GameMode)[Game.mode]+" Type: "+Object.keys(GameType)[Game.type],xPos,yPos+=yStep);
 	
 	yPos = scaledHeight-270;
-	guiRender.fillText("[§]fixedCamera: "+fixedCamera,xPos,yPos+=yStep);
-	guiRender.fillText("[1]noClip: "+noClip,xPos,yPos+=yStep);
-	guiRender.fillText("[2]noBounds: "+noBounds,xPos,yPos+=yStep);
-	guiRender.fillText("[3]noCollect: "+noCollect,xPos,yPos+=yStep);
-	guiRender.fillText("[4]noGrow: "+noGrow,xPos,yPos+=yStep);
-	guiRender.fillText("[5]noPile: "+noPile,xPos,yPos+=yStep);
-	guiRender.fillText("[6]noKnockback: "+noKnockback,xPos,yPos+=yStep);
-	guiRender.fillText("[7]collectCharge: "+collectCharge,xPos,yPos+=yStep);
-	guiRender.fillText("[8]instantCharge: "+instantCharge,xPos,yPos+=yStep);
-	guiRender.fillText("[9]wallJump: "+wallJump,xPos,yPos+=yStep);
-	guiRender.fillText("[0]infiniteJump: "+infiniteJump,xPos,yPos+=yStep);
-	guiRender.fillText("[+/´]shotSpeed: "+shotSpeed,xPos,yPos+=yStep);
-	guiRender.fillText("[G/H]stage: "+levelIndex+"  [,]frameHold  [.]frameStep",xPos,yPos+=yStep);
+	guiRender.fillText("[`]fixedCamera: "+Game.fixedCamera,xPos,yPos+=yStep);
+	guiRender.fillText("[1]noClip: "+Game.noClip,xPos,yPos+=yStep);
+	guiRender.fillText("[2]noBounds: "+Game.noBounds,xPos,yPos+=yStep);
+	guiRender.fillText("[3]noCollect: "+Game.noCollect,xPos,yPos+=yStep);
+	guiRender.fillText("[4]noGrow: "+Game.noGrow,xPos,yPos+=yStep);
+	guiRender.fillText("[5]noPile: "+Game.noPile,xPos,yPos+=yStep);
+	guiRender.fillText("[6]noKnockback: "+Game.noKnockback,xPos,yPos+=yStep);
+	guiRender.fillText("[7]collectCharge: "+Game.collectCharge,xPos,yPos+=yStep);
+	guiRender.fillText("[8]instantCharge: "+Game.instantCharge,xPos,yPos+=yStep);
+	guiRender.fillText("[9]wallJump: "+Game.wallJump,xPos,yPos+=yStep);
+	guiRender.fillText("[0]infiniteJump: "+Game.infiniteJump,xPos,yPos+=yStep);
+	guiRender.fillText("[-/=]shotSpeed: "+Game.shotSpeed,xPos,yPos+=yStep);
+	guiRender.fillText("[G/H]stage: "+Game.levelIndex+"  [,]frameHold  [.]frameStep",xPos,yPos+=yStep);
 	
 	PerfInfo.Update(TimeNow());
 	guiRender.fillText(1*screenWidth.toFixed(4)+"x"+1*screenHeight.toFixed(4)+" | "+PerfInfo.frameInfo+" | "+PerfInfo.fpsInfo,scaledWidth-5,20);
@@ -4432,10 +4423,10 @@ function LogoLoad(){
 	}
 }
 function SaveGame(){ //add exeption?: Can not save
-	localStorage.setItem('vsync',vsync);
-	localStorage.setItem('guiScaleOn',guiScaleOn);
-	localStorage.setItem('updateInterval',updateInterval);
-	localStorage.setItem('soundVolume',soundVolume);
+	localStorage.setItem('vsync',Game.vsync);
+	localStorage.setItem('guiScaleOn',Game.guiScaleOn);
+	localStorage.setItem('updateInterval',Game.updateInterval);
+	localStorage.setItem('soundVolume',Game.soundVolume);
 	localStorage.setItem('KeyBindings',JSON.stringify(KeyBindings));
 	
 	let PlayerInputInfo = [];
@@ -4454,23 +4445,23 @@ function LoadGame(){
 	let loadedPlayerInputInfo = JSON.parse(localStorage.getItem('PlayerInputInfo'));
 	
 	if(loadedVsync!==null)
-		vsync = (loadedVsync==="true");
+		Game.vsync = (loadedVsync==="true");
 	
 	if(loadedGuiScaleOn!==null)
-		guiScaleOn = (loadedGuiScaleOn==="true");
+		Game.guiScaleOn = (loadedGuiScaleOn==="true");
 	
 	if(loadedUpdateInterval!==null){
 		loadedUpdateInterval = Number(loadedUpdateInterval);
 		if(!Number.isNaN(loadedUpdateInterval)){
-			updateInterval = loadedUpdateInterval;
-			UpdateMultiplier(updateInterval);
+			Game.updateInterval = loadedUpdateInterval;
+			UpdateMultiplier(Game.updateInterval);
 		}
 	}
 	
 	if(loadedSoundVolume!==null){
 		loadedSoundVolume = Number(loadedSoundVolume);
 		if(!Number.isNaN(loadedSoundVolume)){
-			soundVolume = loadedSoundVolume;
+			Game.soundVolume = loadedSoundVolume;
 		}
 	}
 	
@@ -4602,22 +4593,22 @@ function LoadingScreen(){
 	}
 }
 function GameLoop(){ //main loop
-	if(vsync)
+	if(Game.vsync)
 		window.requestAnimationFrame(GameLoop);
 	else
 		setTimeout(GameLoop, 0);
 	
-	gameCanvas.style.cursor = (gameStarted && activeMenu===null) ? 'none' : 'auto';
+	gameCanvas.style.cursor = (Game.started && activeMenu===null) ? 'none' : 'auto';
 	
 	CheckGamepads(); //polling gamepad inputs
 	
 	let currentTime = TimeNow();
-	if((!frameHold && (currentTime-lastTime>=updateInterval)) || frameStep){ //maximum UpdateRate (1ms)
-		steps = (frameStep) ? 1 : (currentTime-lastTime)/updateInterval + (steps%1);
-		lastTime = currentTime;
-		frameStep = false;
+	if((!Game.frameHold && (currentTime-Game.lastTime>=Game.updateInterval)) || Game.frameStep){ //maximum UpdateRate (1ms)
+		Game.steps = (Game.frameStep) ? 1 : (currentTime-Game.lastTime)/Game.updateInterval + (Game.steps%1);
+		Game.lastTime = currentTime;
+		Game.frameStep = false;
 		
-		if(!noClear)
+		if(!Game.noClear)
 			gameRender.clearRect(0, 0, screenWidth, screenHeight);
 		
 		guiRender.clearRect(0, 0, scaledWidth, scaledHeight);
@@ -4629,10 +4620,10 @@ function GameLoop(){ //main loop
 			activeMenu.run();
 			if(menuAnimating)
 				AnimateMenu();
-		} else if(gameStarted && !pause)
+		} else if(Game.started && !Game.pause)
 			GameLogic();
 		
-		if(debugMode)
+		if(Game.debugMode)
 			DebugInfo();
 		
 		gameRender.drawImage(guiCanvas, 0, 0);
