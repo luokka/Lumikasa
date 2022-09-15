@@ -1,37 +1,50 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2022)
-const version = "0x4C5";
+const version = "0x4C6";
 
 function TimeNow(){
 	//return Date.now();
 	return performance.now();
 }
 
-let activeMenu = null, activeSubmenu = null, animMenu = null;
-let loadingScreen = true, loadingDone = false, skipAdventure = false;
+const Menu = {active:null,subMenu:null,animMenu:null,animating:false,animThreshold:0.25};
+const Option = {selected:null,active:null,last:null,select:false,cancel:0};
+const Loading = {inProgress:true,done:false,skipAdventure:false,progress:0,barProgress:0,initStages:false,initLevels:false};
 let playerConfirm = false, firstJoined = 0;
+let animForce = 0.025;
+let directionInputRepeatDelay = 500; //ms
 
-const cancel = 0;
-let selectedOption = null, activeOption = null, lastOption = null;
-let optionSelected = false, menuAnimating = false;
-let animForce = 0.025, menuAnimThreshold = 0.25;
+const Mouse = {x:0,y:0,startX:0,startY:0,axisX:0,axisY:0,draw:-1,drag:false};
+let scrollAxisX = 0, scrollAxisY = 0, scrollBuffer = 0;
 
-let menuBgColor = "#000000DD", menuBorderColor = "#00AAAA", menuTextColor = "#FFFF00", menuTextFadeColor = "#777700", menuTitleColor = "#FFFFFF";
-let optionBgColor = "#000000DD", optionBorderColor = "#00AAAA", optionTextColor = "#00AAAA", optionFadeColor = "#005555";
-let optionBgHighlightColor = "#008888DD", optionBorderHighlightColor = "#FFFFFF", optionTextHighlightColor = "#FFFFFF";
-let plainTextColor = "#FFFFFF", playerTextColor = "#000000";
-let PlayerColors = [null,
-{color:"#0000FF", fadeColor:"#000077", bgColor:"#CCCCFF", bgFadeColor:"#666677"}, //player1
-{color:"#FF0000", fadeColor:"#770000", bgColor:"#FFCCCC", bgFadeColor:"#776666"}, //player2
-{color:"#00FF00", fadeColor:"#007700", bgColor:"#CCFFCC", bgFadeColor:"#667766"}, //player3
-{color:"#FFFF00", fadeColor:"#777700", bgColor:"#FFFFCC", bgFadeColor:"#777766"} //player4
+const Color = {
+	menuBg:"#000000DD",
+	menuBorder:"#00AAAA",
+	menuText:"#FFFF00",
+	menuTextFade:"#777700",
+	menuTitle:"#FFFFFF",
+	optionBg:"#000000DD",
+	optionBorder:"#00AAAA",
+	optionText:"#00AAAA",
+	optionFade:"#005555",
+	optionBgHgl:"#008888DD",
+	optionBorderHgl:"#FFFFFF",
+	optionTextHgl:"#FFFFFF",
+	plainText:"#FFFFFF",
+	playerText:"#000000"
+};
+const PlayerColor = [null,
+{color:"#0000FF", fade:"#000077", bg:"#CCCCFF", bgFade:"#666677"}, //player1
+{color:"#FF0000", fade:"#770000", bg:"#FFCCCC", bgFade:"#776666"}, //player2
+{color:"#00FF00", fade:"#007700", bg:"#CCFFCC", bgFade:"#667766"}, //player3
+{color:"#FFFF00", fade:"#777700", bg:"#FFFFCC", bgFade:"#777766"} //player4
 ];
 
-let GameMode = {adventure:0,battle:1};
-let GameType = {score:0,life:1};
+const GameMode = {adventure:0,battle:1};
+const GameType = {score:0,life:1};
 
-let Game = {
+const Game = {
 	maxSpeed:0.625,
 	positionCorrection:0.05,
 	jumpForce:-0.625,
@@ -69,12 +82,6 @@ let Game = {
 	lifeCount:3,
 	levelIndex:0,
 	soundVolume:0.15,
-	pixelScale:100,
-	guiScale:1,
-	guiScaleOn:true,
-	imageSmooth:true,
-	noClear:false,
-	vsync:true,
 	updateInterval:2,
 	speedMultiplier:0,
 	lastTime:TimeNow(),
@@ -86,13 +93,12 @@ let Game = {
 for(let i = 0; i < 11; i++) //saving base speed and acceleration values
 	Game["base"+Object.keys(Game)[i]] = Game[Object.keys(Game)[i]];
 
-let LevelImages = [];
-for(let i = 0; i <= 68; i++)
-	LevelImages.push("assets/level"+i+".png");
+const LevelImages = [];
+for(let i = 0; i <= 68; i++) LevelImages.push("assets/level"+i+".png");
 let loadLevelCount = LevelImages.length;
 let initLevelCount = loadLevelCount;
 
-let StageImages = [
+const StageImages = [
 	"assets/stage0.png",
 	"assets/stage1.png",
 	"assets/stage2.png",
@@ -109,7 +115,7 @@ let initStageCount = loadStageCount;
 let Levels = [];
 for(let i = 0; i < LevelImages.length; i++){
 	Levels.push(new Image());
-	Levels[i].onload = function(){if(!skipAdventure)loadLevelCount--;};
+	Levels[i].onload = function(){if(!Loading.skipAdventure)loadLevelCount--;};
 	Levels[i].src = LevelImages[i];
 }
 let Stages = [];
@@ -119,15 +125,10 @@ for(let i = 0; i < StageImages.length; i++){
 	Stages[i].src = StageImages[i];
 }
 
-let stageRow = 0, stageRowStep = 0, stageColumnCount = 3;
-function GetLastStageRow(){
-	return Math.max(0,Math.ceil(Stages.length/stageColumnCount)-stageColumnCount);
-}
-
 let stageCanvas = document.createElement('canvas');
 let stageRender = stageCanvas.getContext('2d');
 
-let terrain = {
+const Terrain = {
 	canvas:null,
 	render:null,
 	colData:[],
@@ -136,16 +137,13 @@ let terrain = {
 		let collidedLength = Game.mode===GameMode.adventure ? this.collided.length : 1;
 		for(let c = 0; c < collidedLength; c++)
 			this.collided[c] = false;
-	}
+	},
+	pixelIndex:0,
+	pixelBit:0,
+	pixelMask:0
 };
-let terrainPixelIndex = 0, terrainPixelBit = 0, terrainPixelMask = 0;
 
-let mouseX = 0, mouseY = 0, mouseDraw = -1, mouseDrag = false;
-let mouseAxisX = 0, mouseAxisY = 0;
-let scrollAxisX = 0, scrollAxisY = 0;
-let oldMouseX = 0, oldMouseY = 0;
-
-let Crosshair = [null,new Image(),new Image(),new Image(),new Image()];
+const Crosshair = [null,new Image(),new Image(),new Image(),new Image()];
 let loadCrossCount = Crosshair.length-1;
 for(let i = 1; i < Crosshair.length; i++){
 	Crosshair[i].src = "assets/crosshair"+i+".gif";
@@ -156,13 +154,7 @@ for(let i = 1; i < Crosshair.length; i++){
 	};
 }
 
-let snowRate = 0;
-function SnowRate(multiplier,min){
-	//return Clamp(snowRate*multiplier,min,1);
-	return Clamp(snowRate*Math.pow(multiplier,Game.speedMultiplier),min,1);
-}
-
-let Sounds = {
+const Sounds = {
 	confirm:new Audio("assets/confirm.ogg"),
 	cancel:new Audio("assets/cancel.ogg"),
 	select:new Audio("assets/select.ogg"),
@@ -176,58 +168,8 @@ for(let sound in Sounds){
 	if(Sounds.hasOwnProperty(sound))
 		Sounds[sound].oncanplaythrough = function(){loadSoundCount--;};
 }
-function PlaySound(sound){
-	if(Game.soundVolume>0){
-		sound.volume = Game.soundVolume;
-		//sound.pause();
-		sound.currentTime=0;
-		if(sound.paused)
-			sound.play();
-	}
-} function LoopSound(sound,volumeMultiplier){
-	if(Game.soundVolume>0){
-		sound.volume = Game.soundVolume*volumeMultiplier;
-		if(sound.paused){
-			sound.loop = true;
-			sound.play();
-		}
-	}
-} function StopLoop(sound){
-	sound.volume = 0;
-	sound.loop = false;
-} function StopLoops(sounds){
-	for(let sound in sounds){
-		if(sounds.hasOwnProperty(sound)){
-			if(sounds[sound].loop)
-				StopLoop(sounds[sound]);
-		}
-	}
-} function StopSound(sound){
-	sound.volume = 0;
-	sound.loop = false;
-	//sound.pause(); //seems to cause issues
-} function StopAllSounds(){
-	for(let sound in Sounds){
-		if(Sounds.hasOwnProperty(sound))
-			StopSound(Sounds[sound]);
-	}
-	for(let p = 0; p < Players.length; p++){
-		let player = Players[p];
-		for(let sound in player.Sounds){
-			if(player.Sounds.hasOwnProperty(sound))
-				StopSound(player.Sounds[sound]);
-		}
-		for(let b = 0; b < player.Balls.length; b++){
-			let ball = player.Balls[b];
-			for(let sound in ball.Sounds){
-				if(ball.Sounds.hasOwnProperty(sound))
-					StopSound(ball.Sounds[sound]);
-			}
-		}
-	}
-}
 
-let Players = [];
+const Players = [];
 for(let i = 0; i <= 4; i++){
 	Players.push({
 		canvas:null,
@@ -311,21 +253,40 @@ let guiRender = guiCanvas.getContext('2d');
 let tempCanvas = document.createElement('canvas');
 let tempRender = tempCanvas.getContext('2d');
 
-let screenWidth = 0, screenHeight = 0, pixelRatio = 0;
-let scaledWidth = 0, scaledHeight = 0;
-let scaledWidthHalf = 0, scaledHeightHalf = 0;
-
-//Positions
-let middlePointX = 0,middlePointY = 0;
-let levelPosX = 0,levelPosY = 0;
+const Screen = {
+	width:0,
+	height:0,
+	scaledWidth:0,
+	scaledHeight:0,
+	scaledWidthHalf:0,
+	scaledHeightHalf:0,
+	pixelRatio:0,
+	pixelScale:100,
+	guiScale:1,
+	guiScaleOn:true,
+	smoothing:true,
+	noClear:false,
+	vsync:true
+};
 
 //Useful variables
+let guiX=0,guiY=0;
+let levelPosX=0,levelPosY=0;
 let areaScale=1;
 let ballX=0,ballY=0;
 let ballLevelX=0,ballLevelY=0;
 const degToRad = Math.PI/180;
 
-let Input = {
+let snowRate = 0;
+function SnowRate(multiplier,min){
+	return Clamp(snowRate*Math.pow(multiplier,Game.speedMultiplier),min,1); //old: return Clamp(snowRate*multiplier,min,1);
+}
+let stageRow = 0, stageRowStep = 0, stageColumnCount = 3;
+function GetLastStageRow(){
+	return Math.max(0,Math.ceil(Stages.length/stageColumnCount)-stageColumnCount);
+}
+
+const Input = {
 	up:0,
 	down:1,
 	left:2,
@@ -342,8 +303,7 @@ let Input = {
 	aimYpos:13
 };
 let guiNavInputs = [];
-let directionInputRepeatDelay = 500; //ms
-let defaultKeyboard = [
+const defaultKeyboard = [
 	{name:["ArrowUp","W"], input:["ArrowUp","KeyW"], deadzone:0},
 	{name:["ArrowDown","S"], input:["ArrowDown","KeyS"], deadzone:0},
 	{name:["ArrowLeft","A"], input:["ArrowLeft","KeyA"], deadzone:0},
@@ -358,7 +318,7 @@ let defaultKeyboard = [
 	{name:["+MouseX"], input:["+mX"], deadzone:0},
 	{name:["-MouseY"], input:["-mY"], deadzone:0},
 	{name:["+MouseY"], input:["+mY"], deadzone:0}];
-let defaultGamepad = [
+const defaultGamepad = [
 	{name:["-Axis(1)","Joy(12)"], input:["-a1",12], deadzone:0.25},
 	{name:["+Axis(1)","Joy(13)"], input:["+a1",13], deadzone:0.25},
 	{name:["-Axis(0)","Joy(14)"], input:["-a0",14], deadzone:0.25},
@@ -382,42 +342,20 @@ function GetDefaultBindings(defaultBindings){
 	
 	return bindings;
 }
-function SetKeyBinding(playerNum, inputType, name, input){
-	let KeyBind = KeyBindings[playerNum][inputType];
-	if(resetBinding){
-		KeyBind.name = [];
-		KeyBind.input = [];
-		KeyBind.value = [];
-	}
-	if(!KeyBind.input.includes(input)){
-		KeyBind.name.push(name);
-		KeyBind.input.push(input);
-		KeyBind.value.push(0);
-	}
-	if(Players[playerNum].inputMethod>0){ //not keyboard&mouse
-		for(let key = 0; key < KeyBindings[playerNum].length; key++)
-			KeyBindings[playerNum][key].blocked = new Array(KeyBindings[playerNum][key].input.length).fill(true); //prevents immediate input after keybind
-	}
-}
-function ResetKeyValues(){ //for save loading
-	for(let pl = 0; pl < Players.length; pl++){
-		for(let key = 0; key < KeyBindings[pl].length; key++){
-			KeyBindings[pl][key].value = new Array(KeyBindings[pl][key].input.length).fill(0);
-			KeyBindings[pl][key].blocked = new Array(KeyBindings[pl][key].input.length).fill(false);
-		}
-	}
-}
-
-let deadzoneSliderWidth = 5, deadzoneTargetWidth = 5, deadzoneSliderSmall = 5, deadzoneSliderLarge = 15;
-let keyBinding = false;
-let resetBinding = false;
-let keyBindingTimeout = 5; //seconds
-let keyBindingText = "";
-let activeBinding = -1;
-let activePlayer = 1;
+const DzSlider = {width:5,target:5,small:5,large:15}; //deadzoneSlider
+const KeyBind = {
+	inProgress:false,
+	reset:false,
+	timeOut:5,//seconds
+	time:0,
+	timer:null,
+	text:"",
+	inputType:-1,
+	player:1
+};
 let gamepads;
 let gamepadTemp = null;
-let InputMethods = [
+const InputMethods = [
 {id:"Keyboard&Mouse", index:-1, players:[1]}
 ];
 Players[1].inputMethod = 0;
@@ -428,7 +366,7 @@ KeyBindings[2] = GetDefaultBindings(defaultGamepad); //player2
 KeyBindings[3] = GetDefaultBindings(defaultGamepad); //player3
 KeyBindings[4] = GetDefaultBindings(defaultGamepad); //player4
 
-let DebugKeys = {
+const DebugKeys = {
 	ScrollLock(){
 		Game.debugMode=!Game.debugMode;
 		PerfInfo.Reset();
@@ -443,23 +381,23 @@ let DebugKeys = {
 		Game.lastTime = TimeNow();
 	},
 	KeyX(){
-		Game.guiScaleOn=!Game.guiScaleOn;
+		Screen.guiScaleOn=!Screen.guiScaleOn;
 		ScreenSize();
 	},
 	KeyN(){
-		if(Game.pixelScale>1)Game.pixelScale--;
+		if(Screen.pixelScale>1)Screen.pixelScale--;
 		ScreenSize();
 	},
 	KeyM(){
-		Game.pixelScale++;
+		Screen.pixelScale++;
 		ScreenSize();
 	},
 	KeyZ(){
-		Game.imageSmooth=!Game.imageSmooth;
+		Screen.smoothing=!Screen.smoothing;
 		ScreenSize();
 	},
-	KeyC(){Game.noClear=!Game.noClear;},
-	KeyV(){Game.vsync=!Game.vsync;},
+	KeyC(){Screen.noClear=!Screen.noClear;},
+	KeyV(){Screen.vsync=!Screen.vsync;},
 	KeyG(){LoadLevel(Game.levelIndex-1);},
 	KeyH(){LoadLevel(Game.levelIndex+1);},
 	KeyJ(){Game.aimMargin = Clamp(Game.aimMargin*0.98, 0.0001, 1);},
@@ -484,7 +422,7 @@ let DebugKeys = {
 	Minus(){if(Game.shotSpeed>0) Game.shotSpeed--;},
 	Equal(){Game.shotSpeed++;}
 };
-let PerfInfo = {
+const PerfInfo = {
 	Reset(){
 		this.frameCount=0;
 		this.totalFrameCount=0;
@@ -522,36 +460,81 @@ let PerfInfo = {
 	}
 };
 
-UpdateMultiplier(Game.updateInterval);
-
-function ScreenSize(){ //Initialize game screen and update middlePoint (if screensize changes...)
-	pixelRatio = Math.max(window.devicePixelRatio*(Game.pixelScale/100),1/gameCanvas.offsetWidth,1/gameCanvas.offsetHeight);
-	screenWidth = gameCanvas.offsetWidth*pixelRatio;
-	screenHeight = gameCanvas.offsetHeight*pixelRatio;
+function PlaySound(sound){
+	if(Game.soundVolume>0){
+		sound.volume = Game.soundVolume;
+		//sound.pause();
+		sound.currentTime=0;
+		if(sound.paused)
+			sound.play();
+	}
+} function LoopSound(sound,volumeMultiplier){
+	if(Game.soundVolume>0){
+		sound.volume = Game.soundVolume*volumeMultiplier;
+		if(sound.paused){
+			sound.loop = true;
+			sound.play();
+		}
+	}
+} function StopLoop(sound){
+	sound.volume = 0;
+	sound.loop = false;
+} function StopLoops(sounds){
+	for(let sound in sounds){
+		if(sounds.hasOwnProperty(sound)){
+			if(sounds[sound].loop)
+				StopLoop(sounds[sound]);
+		}
+	}
+} function StopSound(sound){
+	sound.volume = 0;
+	sound.loop = false;
+	//sound.pause(); //seems to cause issues
+} function StopAllSounds(){
+	for(let sound in Sounds){
+		if(Sounds.hasOwnProperty(sound))
+			StopSound(Sounds[sound]);
+	}
+	for(let p = 0; p < Players.length; p++){
+		let player = Players[p];
+		for(let sound in player.Sounds){
+			if(player.Sounds.hasOwnProperty(sound))
+				StopSound(player.Sounds[sound]);
+		}
+		for(let b = 0; b < player.Balls.length; b++){
+			let ball = player.Balls[b];
+			for(let sound in ball.Sounds){
+				if(ball.Sounds.hasOwnProperty(sound))
+					StopSound(ball.Sounds[sound]);
+			}
+		}
+	}
+}
+function ScreenSize(){ //Initialize game screen and update sizes (if screensize changes...)
+	Screen.pixelRatio = Math.max(window.devicePixelRatio*(Screen.pixelScale/100),1/gameCanvas.offsetWidth,1/gameCanvas.offsetHeight);
+	Screen.width = gameCanvas.offsetWidth*Screen.pixelRatio;
+	Screen.height = gameCanvas.offsetHeight*Screen.pixelRatio;
 	
-	gameCanvas.width = guiCanvas.width = screenWidth;
-	gameCanvas.height = guiCanvas.height = screenHeight;
+	gameCanvas.width = guiCanvas.width = Screen.width;
+	gameCanvas.height = guiCanvas.height = Screen.height;
 	
-	if(Game.guiScaleOn){
-		Game.guiScale = Math.min(screenWidth/1280,screenHeight/720);
+	if(Screen.guiScaleOn){
+		Screen.guiScale = Math.min(Screen.width/1280,Screen.height/720);
 		
-		/*if(Game.guiScale>=1)
-			Game.guiScale = Math.floor(Game.guiScale);*/ //integer scale for menus if resolution is high enough
+		/*if(Screen.guiScale>=1)
+			Screen.guiScale = Math.floor(Screen.guiScale);*/ //integer scale for menus if resolution is high enough
 		
-		guiRender.scale(Game.guiScale,Game.guiScale);
+		guiRender.scale(Screen.guiScale,Screen.guiScale);
 	} else
-		Game.guiScale = 1;
+		Screen.guiScale = 1;
 	
-	gameRender.imageSmoothingEnabled = guiRender.imageSmoothingEnabled = Game.imageSmooth;
+	gameRender.imageSmoothingEnabled = guiRender.imageSmoothingEnabled = Screen.smoothing;
 	
-	scaledWidth = screenWidth/Game.guiScale;
-	scaledHeight = screenHeight/Game.guiScale;
+	Screen.scaledWidth = Screen.width/Screen.guiScale;
+	Screen.scaledHeight = Screen.height/Screen.guiScale;
 	
-	scaledWidthHalf = Math.floor(scaledWidth/2);
-	scaledHeightHalf = Math.floor(scaledHeight/2);
-	
-	middlePointX = screenWidth/2;
-	middlePointY = screenHeight/2;
+	Screen.scaledWidthHalf = Math.floor(Screen.scaledWidth/2);
+	Screen.scaledHeightHalf = Math.floor(Screen.scaledHeight/2);
 }
 function UpdateMultiplier(value){ //pre-calculate movement values
 	let newSpeedMultiplier = (value>1) ? value : 1;
@@ -597,7 +580,7 @@ function DirectionalKey(player, inputType, state, value){
 		player.rightValue = value;
 	}
 	
-	if(playerConfirm || activeMenu===null || !state)
+	if(playerConfirm || Menu.active===null || !state)
 		return;
 	
 	if(!oldState)
@@ -633,13 +616,13 @@ function DirectionalKey(player, inputType, state, value){
 					firstJoined = player.number;
 				PlaySound(Sounds.confirm);
 			}
-		} else if(activeMenu!==null)
+		} else if(Menu.active!==null)
 			PushGuiNavInput(Input.confirm);
 	}
 	player.confirmKey = state;
 } function CancelKey(player, state){
 	if(!player.cancelKey && state){
-		if(activeSubmenu!==null || activeMenu===GUI.pause)
+		if(Menu.subMenu!==null || Menu.active===GUI.pause)
 			PushGuiNavInput(Input.cancel);
 	}
 	player.cancelKey = state;
@@ -673,24 +656,24 @@ function DirectionalKey(player, inputType, state, value){
 			mouseYaim = (Bind[type].input[axis][1] === 'm' || mouseYaim);
 	}
 	if(mouseXaim)
-		player.aimX=(player.aimAxisX*screenWidth+screenWidth)/2/areaScale;
+		player.aimX=(player.aimAxisX*Screen.width+Screen.width)/2/areaScale;
 	else {
 		player.aimX=player.playerPosX+player.playerRadius;
 		
 		if(player.aimAxisX<0)
 			player.aimX+=(player.playerPosX+player.playerRadius)*player.aimAxisX;
 		else if(player.aimAxisX>0)
-			player.aimX+=(screenWidth/areaScale-player.playerPosX-player.playerRadius)*player.aimAxisX;
+			player.aimX+=(Screen.width/areaScale-player.playerPosX-player.playerRadius)*player.aimAxisX;
 	}
 	if(mouseYaim)
-		player.aimY=(player.aimAxisY*screenHeight+screenHeight)/2/areaScale;
+		player.aimY=(player.aimAxisY*Screen.height+Screen.height)/2/areaScale;
 	else {
 		player.aimY=player.playerPosY+player.playerRadius;
 		
 		if(player.aimAxisY<0)
 			player.aimY+=(player.playerPosY+player.playerRadius)*player.aimAxisY;
 		else if(player.aimAxisY>0)
-			player.aimY+=(screenHeight/areaScale-player.playerPosY-player.playerRadius)*player.aimAxisY;
+			player.aimY+=(Screen.height/areaScale-player.playerPosY-player.playerRadius)*player.aimAxisY;
 	}
 	if(player.aimAxisX === 0 && player.aimAxisY === 0)
 		player.aimCentered = true;
@@ -738,25 +721,25 @@ function InputUpdate(input,players,value){
 	let validInput = false;
 	for(let pl = 0; pl < players.length; pl++){
 		let playerNum = players[pl];
-		let KeyBind = KeyBindings[playerNum];
-		for(let k = 0; k < KeyBind.length; k++){
-			for(let i = 0; i < KeyBind[k].input.length; i++){
-				if(input === KeyBind[k].input[i]){
+		let keyBind = KeyBindings[playerNum];
+		for(let k = 0; k < keyBind.length; k++){
+			for(let i = 0; i < keyBind[k].input.length; i++){
+				if(input === keyBind[k].input[i]){
 					validInput = true;
 					
-					let prevValue = KeyBind[k].value[i];
-					KeyBind[k].value[i] = Math.abs(value);
+					let prevValue = keyBind[k].value[i];
+					keyBind[k].value[i] = Math.abs(value);
 					
-					if(KeyBind[k].value[i] > KeyBind[k].deadzone){ //InputDown
-						if(KeyBind[k].blocked[i])
+					if(keyBind[k].value[i] > keyBind[k].deadzone){ //InputDown
+						if(keyBind[k].blocked[i])
 							continue;
 						
-						SetInput(k,true,Players[playerNum],(KeyBind[k].value[i]-KeyBind[k].deadzone)/(1-KeyBind[k].deadzone)); //last parameter used to be just KeyBind[k].value[i]
+						SetInput(k,true,Players[playerNum],(keyBind[k].value[i]-keyBind[k].deadzone)/(1-keyBind[k].deadzone)); //last parameter used to be just keyBind[k].value[i]
 						
-					} else if(KeyBind[k].value[i] <= KeyBind[k].deadzone){ //InputUp (KeyBind[k].value[i] < KeyBind[k].deadzone || KeyBind[k].value[i]===0???)
-						KeyBind[k].blocked[i] = false;
-						if(prevValue > KeyBind[k].deadzone)
-							SetInput(k,false,Players[playerNum],KeyBind[k].value[i]);
+					} else if(keyBind[k].value[i] <= keyBind[k].deadzone){ //InputUp (keyBind[k].value[i] < keyBind[k].deadzone || keyBind[k].value[i]===0???)
+						keyBind[k].blocked[i] = false;
+						if(prevValue > keyBind[k].deadzone)
+							SetInput(k,false,Players[playerNum],keyBind[k].value[i]);
 					}
 				}
 			}
@@ -765,22 +748,22 @@ function InputUpdate(input,players,value){
 	return validInput;
 }
 function UpdateMousePos(x,y){
-	mouseX = x/Game.guiScale*pixelRatio;
-	mouseY = y/Game.guiScale*pixelRatio;
-	mouseAxisX = mouseX/(scaledWidthHalf)-1;
-	mouseAxisY = mouseY/(scaledHeightHalf)-1;
+	Mouse.x = x/Screen.guiScale*Screen.pixelRatio;
+	Mouse.y = y/Screen.guiScale*Screen.pixelRatio;
+	Mouse.axisX = Mouse.x/(Screen.scaledWidthHalf)-1;
+	Mouse.axisY = Mouse.y/(Screen.scaledHeightHalf)-1;
 }
 document.addEventListener('keydown', function(event){
 	if(event.code==="")
 		return;
-	if(keyBinding){
-		if(Players[activePlayer].inputMethod===0){
-			SetKeyBinding(activePlayer, activeBinding, event.code.replace('Key',''), event.code);
-			StopKeyBinding();
+	if(KeyBind.inProgress){
+		if(Players[KeyBind.player].inputMethod===0){
+			SetKeyBind(event.code.replace('Key',''), event.code);
+			StopKeyBind();
 		} event.preventDefault();
 	}
-	else if(loadingScreen && loadingDone && event.code === "Enter")
-		loadingScreen = false;
+	else if(Loading.inProgress && event.code === "Enter")
+		CloseLoadingScreen();
 	else if(InputUpdate(event.code,InputMethods[0].players,1))
 		event.preventDefault();
 	else {
@@ -805,16 +788,16 @@ document.addEventListener('keyup', function(event){
 });
 gameCanvas.addEventListener('mousedown', function(event){
 	UpdateMousePos(event.clientX-this.offsetLeft,event.clientY-this.offsetTop);
-	if(keyBinding){
-		if(Players[activePlayer].inputMethod===0){
-			SetKeyBinding(activePlayer, activeBinding, "Mouse"+event.button, "m"+event.button);
-			StopKeyBinding();
+	if(KeyBind.inProgress){
+		if(Players[KeyBind.player].inputMethod===0){
+			SetKeyBind("Mouse"+event.button, "m"+event.button);
+			StopKeyBind();
 		}
-	} else if(!loadingScreen && activeMenu!==null){
+	} else if(!Loading.inProgress && Menu.active!==null){
 		if(CheckMouse(true))
 			PushGuiNavInput(Input.confirm);
-		else if(activeSubmenu===null)
-			mouseDraw=event.button;
+		else if(Menu.subMenu===null)
+			Mouse.draw = event.button;
 		else
 			InputUpdate("m"+event.button,InputMethods[0].players,1);
 	} else
@@ -824,69 +807,68 @@ gameCanvas.addEventListener('mousedown', function(event){
 });
 document.addEventListener('mouseup', function(event){
 	InputUpdate("m"+event.button,InputMethods[0].players,0);
-	mouseDraw=-1;
-	mouseDrag=false;
+	Mouse.draw = -1;
+	Mouse.drag = false;
 });
 gameCanvas.addEventListener('mousemove', function(event){
 	UpdateMousePos(event.clientX-this.offsetLeft,event.clientY-this.offsetTop);
-	if(keyBinding){
-		if(Players[activePlayer].inputMethod===0){
-			if((mouseX-oldMouseX < -50 && mouseX < scaledWidth*0.1) || (mouseX-oldMouseX > 50 && mouseX > scaledWidth*0.9)){
-				let axisSign = Math.sign(mouseX-oldMouseX)===1 ? "+" : "-";
+	if(KeyBind.inProgress){
+		if(Players[KeyBind.player].inputMethod===0){
+			if((Mouse.x-Mouse.startX < -50 && Mouse.x < Screen.scaledWidth*0.1) || (Mouse.x-Mouse.startX > 50 && Mouse.x > Screen.scaledWidth*0.9)){
+				let axisSign = Math.sign(Mouse.x-Mouse.startX)===1 ? "+" : "-";
 				let axisName = axisSign + "MouseX";
 				let axisCode = axisSign + "mX";
 				
-				SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
+				SetKeyBind(axisName, axisCode);
 				
-				StopKeyBinding();
-			} else if((mouseY-oldMouseY < -50 && mouseY < scaledHeight*0.1) || (mouseY-oldMouseY > 50 && mouseY > scaledHeight*0.9)){
-				let axisSign = Math.sign(mouseY-oldMouseY)===1 ? "+" : "-";
+				StopKeyBind();
+			} else if((Mouse.y-Mouse.startY < -50 && Mouse.y < Screen.scaledHeight*0.1) || (Mouse.y-Mouse.startY > 50 && Mouse.y > Screen.scaledHeight*0.9)){
+				let axisSign = Math.sign(Mouse.y-Mouse.startY)===1 ? "+" : "-";
 				let axisName = axisSign + "MouseY";
 				let axisCode = axisSign + "mY";
 				
-				SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
+				SetKeyBind(axisName, axisCode);
 				
-				StopKeyBinding();
+				StopKeyBind();
 			}
 		}
-	} else if(!loadingScreen && activeMenu!==null){
-		//let previousOption = selectedOption;
+	} else if(!Loading.inProgress && Menu.active!==null){
+		//let previousOption = Option.selected;
 		CheckMouse(false);
-		//if(previousOption !== selectedOption)
+		//if(previousOption !== Option.selected)
 			//PlaySound(Sounds.select);
 	}
-	InputUpdate("-mX",InputMethods[0].players,Math.min(mouseAxisX,0));
-	InputUpdate("+mX",InputMethods[0].players,Math.max(mouseAxisX,0));
-	InputUpdate("-mY",InputMethods[0].players,Math.min(mouseAxisY,0));
-	InputUpdate("+mY",InputMethods[0].players,Math.max(mouseAxisY,0));
+	InputUpdate("-mX",InputMethods[0].players,Math.min(Mouse.axisX,0));
+	InputUpdate("+mX",InputMethods[0].players,Math.max(Mouse.axisX,0));
+	InputUpdate("-mY",InputMethods[0].players,Math.min(Mouse.axisY,0));
+	InputUpdate("+mY",InputMethods[0].players,Math.max(Mouse.axisY,0));
 });
-let scrollBuffer = 0;
 gameCanvas.addEventListener('wheel', function(event){
-	if(keyBinding){
-		if(Players[activePlayer].inputMethod===0){
+	if(KeyBind.inProgress){
+		if(Players[KeyBind.player].inputMethod===0){
 			if(Math.abs(event.deltaX) > 1){
 				let axisSign = Math.sign(event.deltaX)===1 ? "+" : "-";
 				let axisName = axisSign + "ScrollX";
 				let axisCode = axisSign + "sX";
 				
-				SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
+				SetKeyBind(axisName, axisCode);
 				
-				StopKeyBinding();
+				StopKeyBind();
 				scrollAxisX=0;
 			} else if(Math.abs(event.deltaY) > 1){
 				let axisSign = Math.sign(event.deltaY)===1 ? "+" : "-";
 				let axisName = axisSign + "ScrollY";
 				let axisCode = axisSign + "sY";
 				
-				SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
+				SetKeyBind(axisName, axisCode);
 				
-				StopKeyBinding();
+				StopKeyBind();
 				scrollAxisY=0;
 			}
 		}
 		event.preventDefault();
 	}
-	if(activeSubmenu===GUI.battle && !playerConfirm && Stages.length>0)
+	if(Menu.subMenu===GUI.battle && !playerConfirm && Stages.length>0)
 	if(MouseOver(GUI.battle.background[0])){
 		if(Math.sign(scrollBuffer)!==Math.sign(event.deltaY)) //if scrolling to opposite direction
 			scrollBuffer = event.deltaY;
@@ -898,9 +880,9 @@ gameCanvas.addEventListener('wheel', function(event){
 			let clampedStageRow = Clamp(stageRow, 0, GetLastStageRow());
 			if(stageRow !== clampedStageRow)
 				stageRow = clampedStageRow;
-			else if(selectedOption.parent === GUI.battle.background[0]){
-				let clampedStageButton = Clamp(selectedOption.stage+Math.sign(scrollBuffer)*stageColumnCount, 0, Stages.length-1);
-				selectedOption = GUI.battle.stagebutton[clampedStageButton];
+			else if(Option.selected.parent === GUI.battle.background[0]){
+				let clampedStageButton = Clamp(Option.selected.stage+Math.sign(scrollBuffer)*stageColumnCount, 0, Stages.length-1);
+				Option.selected = GUI.battle.stagebutton[clampedStageButton];
 			}
 			scrollBuffer = 0;
 		}
@@ -926,7 +908,7 @@ gameCanvas.addEventListener('wheel', function(event){
 gameCanvas.addEventListener('drop', function(event){
 	event.preventDefault();
 	for(let i = 0; i < event.dataTransfer.files.length; i++){
-		if(activeSubmenu!==GUI.battle || playerConfirm || menuAnimating){
+		if(Menu.subMenu!==GUI.battle || playerConfirm || Menu.animating){
 			gameCanvas.style.backgroundImage = "url('"+URL.createObjectURL(event.dataTransfer.files[i])+"')";
 			break;
 		}
@@ -944,9 +926,9 @@ gameCanvas.addEventListener('drop', function(event){
 			
 			AddStageButton(Stages.length-1,this.naturalWidth,this.naturalHeight);
 			
-			if(activeSubmenu===GUI.battle && !playerConfirm && !menuAnimating){
+			if(Menu.subMenu===GUI.battle && !playerConfirm && !Menu.animating){
 				stageRow = GetLastStageRow();
-				selectedOption = GUI.battle.stagebutton[Stages.length-1];
+				Option.selected = GUI.battle.stagebutton[Stages.length-1];
 			}
 			
 			loadStageCount--;
@@ -961,12 +943,7 @@ gameCanvas.addEventListener('contextmenu', function(event){
 		event.preventDefault();
 });
 gameCanvas.addEventListener('click', function(event){
-	if(loadingScreen){
-		if(loadingDone)
-			loadingScreen = false;
-		else
-			skipAdventure = true;
-	}
+	CloseLoadingScreen();
 	gameCanvas.focus();
 });
 gameCanvas.addEventListener('dblclick', function(event){
@@ -1016,8 +993,8 @@ function CheckGamepads(){
 			emptyGamepads++;
 	}
 	if(gamepads.length-emptyGamepads !== InputMethods.length-1){
-		if(keyBinding)
-			StopKeyBinding();
+		if(KeyBind.inProgress)
+			StopKeyBind();
 		UpdateInputMethods();
 	}
 	
@@ -1042,11 +1019,11 @@ function CheckGamepads(){
 		}
 	}
 	
-	if(keyBinding){
-		if(Players[activePlayer].inputMethod < 1)
+	if(KeyBind.inProgress){
+		if(Players[KeyBind.player].inputMethod < 1)
 			return;
 		
-		let gp = InputMethods[Players[activePlayer].inputMethod].index; //or Players[activePlayer].inputInfo.index
+		let gp = InputMethods[Players[KeyBind.player].inputMethod].index; //or Players[KeyBind.player].inputInfo.index
 		
 		if(gamepadTemp.axisValues.length===0 && gamepadTemp.buttonValues.length===0){
 			for(let b = 0; b < gamepads[gp].buttons.length; b++)
@@ -1054,15 +1031,15 @@ function CheckGamepads(){
 			for(let a = 0; a < gamepads[gp].axes.length; a++)
 				gamepadTemp.axisValues.push(Math.abs(gamepads[gp].axes[a]));
 		}
-		let currentDeadzone = KeyBindings[activePlayer][activeBinding].deadzone;
+		let currentDeadzone = KeyBindings[KeyBind.player][KeyBind.inputType].deadzone;
 		for(let b = 0; b < gamepads[gp].buttons.length; b++){
 			if(gamepads[gp].buttons[b].value>=gamepadTemp.buttonValues[b] && gamepadTemp.buttonValues[b]>currentDeadzone) //prevents immediate keybind
 				continue;
 			
 			gamepadTemp.buttonValues[b] = 0; //disables the first if statement
 			if(gamepads[gp].buttons[b].value > 0.9){
-				SetKeyBinding(activePlayer, activeBinding, "Joy("+b+")", b);
-				StopKeyBinding();
+				SetKeyBind("Joy("+b+")", b);
+				StopKeyBind();
 				return;
 			}
 		}
@@ -1076,8 +1053,8 @@ function CheckGamepads(){
 				let axisName = axisSign + "Axis("+a+")";
 				let axisCode = axisSign + "a"+a;
 				
-				SetKeyBinding(activePlayer, activeBinding, axisName, axisCode);
-				StopKeyBinding();
+				SetKeyBind(axisName, axisCode);
+				StopKeyBind();
 				return;
 			}
 		}
@@ -1104,26 +1081,26 @@ function CreateColData(imageData){
 	return colData;
 }
 function GetPixelMask(terrainPixel){
-	terrainPixelIndex = terrainPixel >> 3;
-	terrainPixelBit = terrainPixel-(terrainPixelIndex << 3);
-	return (1 << terrainPixelBit);
+	Terrain.pixelIndex = terrainPixel >> 3;
+	Terrain.pixelBit = terrainPixel-(Terrain.pixelIndex << 3);
+	return (1 << Terrain.pixelBit);
 }
 function GetLevelColData(terrainPixel){
-	terrainPixelMask = GetPixelMask(terrainPixel);
-	return (terrain.colData[terrainPixelIndex] & terrainPixelMask);
+	Terrain.pixelMask = GetPixelMask(terrainPixel);
+	return (Terrain.colData[Terrain.pixelIndex] & Terrain.pixelMask);
 }
 function SetLevelColData(terrainPixel, active){
-	terrainPixelMask = GetPixelMask(terrainPixel);
+	Terrain.pixelMask = GetPixelMask(terrainPixel);
 	
 	if(active)
-		terrain.colData[terrainPixelIndex] |= terrainPixelMask;
+		Terrain.colData[Terrain.pixelIndex] |= Terrain.pixelMask;
 	else
-		terrain.colData[terrainPixelIndex] &= ~terrainPixelMask;
+		Terrain.colData[Terrain.pixelIndex] &= ~Terrain.pixelMask;
 }
 function SetTerrainProperties(level){
-	terrain.canvas = Levels[level].canvas;
-	terrain.render = Levels[level].render;
-	terrain.colData = Levels[level].colData;
+	Terrain.canvas = Levels[level].canvas;
+	Terrain.render = Levels[level].render;
+	Terrain.colData = Levels[level].colData;
 }
 function UpdateLevelData(level,levelX,levelY){ //object.level could be updated in this function already?
 	let newLevelX = levelX;
@@ -1164,7 +1141,7 @@ function FindLevel(currentLevel,levelXpos,levelYpos){
 	return newLevel;
 }
 function LoadLevel(lIndex){
-	if(activeMenu!==null || loadingScreen)
+	if(Menu.active!==null || Loading.inProgress)
 		return;
 	
 	Game.levelIndex = lIndex;
@@ -1191,12 +1168,12 @@ function LoadLevel(lIndex){
 		stageCanvas.height = Stages[lIndex].naturalHeight;
 		stageRender = stageCanvas.getContext('2d');
 		
-		terrain.canvas = stageCanvas;
-		terrain.render = stageRender;
+		Terrain.canvas = stageCanvas;
+		Terrain.render = stageRender;
 		
-		terrain.render.drawImage(Stages[lIndex], 0, 0 );
+		Terrain.render.drawImage(Stages[lIndex], 0, 0 );
 		
-		terrain.colData = CreateColData(terrain.render.getImageData(0, 0, terrain.canvas.width, terrain.canvas.height).data);
+		Terrain.colData = CreateColData(Terrain.render.getImageData(0, 0, Terrain.canvas.width, Terrain.canvas.height).data);
 	}
 	InitializePlayers();
 }
@@ -1257,15 +1234,15 @@ function InitializePlayer(player,newGame){
 	let spawnPosY = levelPosY; //default for battleMode
 	if(Game.mode===GameMode.battle){
 		let spawnPositions = [];
-		let colWidth = Math.ceil(terrain.canvas.width/8);
-		let colHeight = terrain.canvas.height;
+		let colWidth = Math.ceil(Terrain.canvas.width/8);
+		let colHeight = Terrain.canvas.height;
 		for(let cY = 0; cY < colHeight-31; cY+=8){ //finding all empty spots in the stage large enough for spawning (8x8 grid based, 32x32 minimum spawn area)
 			spawnSearchLoop2:
 			for(let cX = 0; cX < colWidth-4; cX++){
-				if(terrain.colData[cY*colWidth+cX]===0){
+				if(Terrain.colData[cY*colWidth+cX]===0){
 					for(let cYs = 0; cYs < 32; cYs++){
 						let col = (cY+cYs)*colWidth+cX;
-						if(terrain.colData[col] + terrain.colData[col+1] + terrain.colData[col+2] + terrain.colData[col+3] > 0)
+						if(Terrain.colData[col] + Terrain.colData[col+1] + Terrain.colData[col+2] + Terrain.colData[col+3] > 0)
 							continue spawnSearchLoop2;
 					}
 					spawnPositions.push({x:(cX << 3),y:cY}); //cX multiply by 8
@@ -1579,12 +1556,12 @@ function BallBallCollision(ball1,ball2){
 						let levelX = levelInfo.levelX;
 						let levelY = levelInfo.levelY;
 						
-						if(levelX >= 0 && levelX < terrain.canvas.width && levelY >= 0 && levelY < terrain.canvas.height){ //pos is in bounds
-							let levelPixel = levelY*terrain.canvas.width+levelX;
+						if(levelX >= 0 && levelX < Terrain.canvas.width && levelY >= 0 && levelY < Terrain.canvas.height){ //pos is in bounds
+							let levelPixel = levelY*Terrain.canvas.width+levelX;
 							
 							SetLevelColData(levelPixel,true);
 							
-							SetClipPixel(terrain, levelX, levelY, ball1.level);
+							SetClipPixel(Terrain, levelX, levelY, ball1.level);
 						}
 						
 						SetClipPixel(ball1, ballVector1[0].x, ballVector1[0].y);
@@ -1658,20 +1635,20 @@ function BallTerrainCollision(ball,ballPosDiff){
 			
 			let outOfBounds = false;
 			let levelPixel = -1;
-			if(levelX < 0 || levelX >= terrain.canvas.width || levelY < 0 || levelY >= terrain.canvas.height){
+			if(levelX < 0 || levelX >= Terrain.canvas.width || levelY < 0 || levelY >= Terrain.canvas.height){
 				if(!Game.noBounds){
 					outOfBounds = true;
-					levelY = Clamp(levelY, 0, terrain.canvas.height-1); //Clamping Y-position in bounds
-					levelX = Clamp(levelX, 0, terrain.canvas.width-1); //Clamping X-position in bounds
-					levelPixel = levelY*terrain.canvas.width+levelX;
+					levelY = Clamp(levelY, 0, Terrain.canvas.height-1); //Clamping Y-position in bounds
+					levelX = Clamp(levelX, 0, Terrain.canvas.width-1); //Clamping X-position in bounds
+					levelPixel = levelY*Terrain.canvas.width+levelX;
 				}
 			} else
-				levelPixel = levelY*terrain.canvas.width+levelX;
+				levelPixel = levelY*Terrain.canvas.width+levelX;
 			
 			if(GetLevelColData(levelPixel)!==0 || outOfBounds){ //if ball hits level-terrain or is out of bounds
 				if(Game.noPile){
 					SetLevelColData(levelPixel,false);
-					terrain.render.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
+					Terrain.render.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
 					
 					if(outOfBounds){
 						SetClipPixel(ball, ballVector[i].x, ballVector[i].y);
@@ -1693,12 +1670,12 @@ function BallTerrainCollision(ball,ballPosDiff){
 					levelX = levelInfo.levelX;
 					levelY = levelInfo.levelY;
 					
-					if(levelX >= 0 && levelX < terrain.canvas.width && levelY >= 0 && levelY < terrain.canvas.height){ //pos is in bounds
-						levelPixel = levelY*terrain.canvas.width+levelX;
+					if(levelX >= 0 && levelX < Terrain.canvas.width && levelY >= 0 && levelY < Terrain.canvas.height){ //pos is in bounds
+						levelPixel = levelY*Terrain.canvas.width+levelX;
 						
 						SetLevelColData(levelPixel,true);
 						
-						SetClipPixel(terrain, levelX, levelY, ball.level);
+						SetClipPixel(Terrain, levelX, levelY, ball.level);
 					}
 					SetClipPixel(ball, ballVector[i].x, ballVector[i].y);
 					
@@ -1711,7 +1688,7 @@ function BallTerrainCollision(ball,ballPosDiff){
 }
 function PlayerTerrainCollision(player){
 	player.onGround = false;
-	terrain.ResetCollided();
+	Terrain.ResetCollided();
 	
 	for(let i = 0; i < player.colPoints.length; i++){
 		let blockX = player.colPoints[i].x;
@@ -1725,21 +1702,21 @@ function PlayerTerrainCollision(player){
 		let levelPixel = -1;
 		let outOfBounds = false;
 		
-		if(levelX>=0 && levelX<terrain.canvas.width && levelY>=0 && levelY<terrain.canvas.height) //in bounds
-			levelPixel = levelY*terrain.canvas.width+levelX;
+		if(levelX>=0 && levelX<Terrain.canvas.width && levelY>=0 && levelY<Terrain.canvas.height) //in bounds
+			levelPixel = levelY*Terrain.canvas.width+levelX;
 		else if(!Game.noBounds){ //out of bounds
 			outOfBounds = true;
 			if(levelX < -player.colMiddle){
 				player.playerPosX -= levelX;
 				player.momentumX = Math.max(player.momentumX,0);
-			} else if(levelX >= terrain.canvas.width+player.colMiddle){
-				player.playerPosX -= levelX-(terrain.canvas.width-1);
+			} else if(levelX >= Terrain.canvas.width+player.colMiddle){
+				player.playerPosX -= levelX-(Terrain.canvas.width-1);
 				player.momentumX = Math.min(player.momentumX,0);
 			} if(levelY < -player.colMiddle){
 				player.playerPosY -= levelY;
 				player.momentumY = Math.max(player.momentumY,0);
-			} else if(levelY >= terrain.canvas.height+player.colMiddle){
-				player.playerPosY -= levelY-(terrain.canvas.height-1);
+			} else if(levelY >= Terrain.canvas.height+player.colMiddle){
+				player.playerPosY -= levelY-(Terrain.canvas.height-1);
 				player.momentumY = Math.min(player.momentumY,0);
 			}
 		}
@@ -1787,17 +1764,17 @@ function PlayerTerrainCollision(player){
 			if((Game.collectCharge || !player.charging) && !player.chargeHold){ //OR "if((Game.collectCharge && !player.chargeHold) || !player.charging)"?
 				if(player.rotMomentum!==0 && !outOfBounds){ //can't collect snow without rotating
 					if(!Game.noGrow){
-						if(!terrain.collided[player.level]){
+						if(!Terrain.collided[player.level]){
 							let xOffset = 0;
 							let yOffset = 0;
 							if(Game.mode===GameMode.adventure){
 								xOffset = Levels[player.level].xOffset;
 								yOffset = Levels[player.level].yOffset;
 							}
-							player.render.drawImage(terrain.canvas,
+							player.render.drawImage(Terrain.canvas,
 							Math.floor(levelPosX-player.playerPosX+xOffset), //xOffset is always 0 in battleMode
 							Math.floor(levelPosY-player.playerPosY+yOffset)); //yOffset is always 0 in battleMode
-							terrain.collided[player.level] = true;
+							Terrain.collided[player.level] = true;
 						}
 						player.pixelCount += Math.ceil(Game.speedMultiplier/2); //collects snow faster
 						snowRate = SnowRate(1.002,0.05);
@@ -1805,8 +1782,8 @@ function PlayerTerrainCollision(player){
 							ChangeSize(1,player);
 					}
 					if(!Game.noCollect){
-						terrain.render.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
-						SetLevelColData(levelPixel,false); //alternative: terrain.colData[terrainPixelIndex] &= ~terrainPixelMask;
+						Terrain.render.clearRect(levelX, levelY, 1, 1 ); //removing a pixel from contactpoint
+						SetLevelColData(levelPixel,false); //alternative: Terrain.colData[Terrain.pixelIndex] &= ~Terrain.pixelMask;
 					}
 				}
 			}
@@ -1835,8 +1812,8 @@ function CheckPlayerInsideTerrain(player,posDiffX,posDiffY){
 		let levelPixel = -1;
 		let outOfBounds = false;
 		
-		if(levelX>=0 && levelX<terrain.canvas.width && levelY>=0 && levelY<terrain.canvas.height) //in bounds
-			levelPixel = levelY*terrain.canvas.width+levelX;
+		if(levelX>=0 && levelX<Terrain.canvas.width && levelY>=0 && levelY<Terrain.canvas.height) //in bounds
+			levelPixel = levelY*Terrain.canvas.width+levelX;
 		else if(!Game.noBounds) //out of bounds
 			outOfBounds = true;
 		
@@ -2017,7 +1994,7 @@ for(let step = Game.steps; step >= 1; step--){
 			if(!ball.isMoving)
 				continue;
 			
-			terrain.ResetCollided();
+			Terrain.ResetCollided();
 			
 			let prevBallPosX = ball.ballPosX;
 			let prevBallPosY = ball.ballPosY;
@@ -2062,19 +2039,19 @@ for(let step = Game.steps; step >= 1; step--){
 			ball.firstColCheck = false;
 			if(ball.collided){
 				snowRate = SnowRate(1.02,0.5);
-				let collidedLength = Game.mode===GameMode.adventure ? terrain.collided.length : 1;
+				let collidedLength = Game.mode===GameMode.adventure ? Terrain.collided.length : 1;
 				for(let l = 0; l < collidedLength; l++){
-					if(terrain.collided[l]){
+					if(Terrain.collided[l]){
 						let xOffset = 0;
 						let yOffset = 0;
 						if(Game.mode===GameMode.adventure){
 							xOffset = Levels[l].xOffset;
 							yOffset = Levels[l].yOffset;
-							terrain.render = Levels[l].render;
+							Terrain.render = Levels[l].render;
 						}
-						terrain.render.clip();
-						terrain.render.drawImage(ball.canvas,ballLevelX-xOffset,ballLevelY-yOffset);
-						terrain.render.restore();
+						Terrain.render.clip();
+						Terrain.render.drawImage(ball.canvas,ballLevelX-xOffset,ballLevelY-yOffset);
+						Terrain.render.restore();
 					}
 				}
 				ball.render.clip();
@@ -2101,16 +2078,16 @@ for(let step = Game.steps; step >= 1; step--){
 	if(Game.fixedCamera){
 		let xOffset = 0;
 		let yOffset = 0;
-		let areaCanvas = terrain.canvas;
+		let areaCanvas = Terrain.canvas;
 		if(Game.mode===GameMode.adventure){
 			let l = Players[firstJoined].level;
 			xOffset = Levels[l].xOffset;
 			yOffset = Levels[l].yOffset;
 			areaCanvas = Levels[l].canvas;
 		}
-		areaScale = Math.min(screenWidth/areaCanvas.width,screenHeight/areaCanvas.height);
-		let levelOffsetX = (screenWidth/areaScale-areaCanvas.width)/2-xOffset;
-		let levelOffsetY = (screenHeight/areaScale-areaCanvas.height)/2-yOffset;
+		areaScale = Math.min(Screen.width/areaCanvas.width,Screen.height/areaCanvas.height);
+		let levelOffsetX = (Screen.width/areaScale-areaCanvas.width)/2-xOffset;
+		let levelOffsetY = (Screen.height/areaScale-areaCanvas.height)/2-yOffset;
 		for(let p = 1; p < Players.length; p++){
 			if(!Players[p].joined)
 				continue;
@@ -2142,40 +2119,40 @@ for(let step = Game.steps; step >= 1; step--){
 			}
 		}
 		/*if(!noCameraBounds){
-			areaScale = Math.min(screenWidth,screenHeight)/(Math.min(terrain.canvas.width,terrain.canvas.height)/2);
-			let newAreaScale1 = (screenWidth*Game.aimMargin)/Math.min((maxX-minX),terrain.canvas.width*Game.aimMargin);
-			let newAreaScale2 = (screenHeight*Game.aimMargin)/Math.min((maxY-minY),terrain.canvas.height*Game.aimMargin);
+			areaScale = Math.min(Screen.width,Screen.height)/(Math.min(Terrain.canvas.width,Terrain.canvas.height)/2);
+			let newAreaScale1 = (Screen.width*Game.aimMargin)/Math.min((maxX-minX),Terrain.canvas.width*Game.aimMargin);
+			let newAreaScale2 = (Screen.height*Game.aimMargin)/Math.min((maxY-minY),Terrain.canvas.height*Game.aimMargin);
 			areaScale = Math.min(areaScale,newAreaScale1,newAreaScale2);
 		} else {*/
-		areaScale = Math.min(screenWidth,screenHeight)/Game.aimArea;
-		let newAreaScale1 = (screenWidth*Game.aimMargin)/(maxX-minX);
-		let newAreaScale2 = (screenHeight*Game.aimMargin)/(maxY-minY);
+		areaScale = Math.min(Screen.width,Screen.height)/Game.aimArea;
+		let newAreaScale1 = (Screen.width*Game.aimMargin)/(maxX-minX);
+		let newAreaScale2 = (Screen.height*Game.aimMargin)/(maxY-minY);
 		areaScale = Math.min(areaScale,newAreaScale1,newAreaScale2);
 		
 		let playersCenterX = (minX+maxX)/2;
 		let playersCenterY = (minY+maxY)/2;
 		
-		let scaledMiddlePointX = middlePointX/areaScale; //middlePoint/areaScale converts screen center to logical center
-		let scaledMiddlePointY = middlePointY/areaScale;
+		let scaledMiddlePointX = Screen.width/2/areaScale; //middlePoint/areaScale converts screen center to logical center
+		let scaledMiddlePointY = Screen.height/2/areaScale;
 		
 		let xPositionChange = scaledMiddlePointX-playersCenterX;
 		let yPositionChange = scaledMiddlePointY-playersCenterY;
 		
 		/*if(!noCameraBounds){
-			if(terrain.canvas.width*areaScale > screenWidth){
+			if(Terrain.canvas.width*areaScale > Screen.width){
 				if(levelPosX+xPositionChange > 0)
 					xPositionChange -= levelPosX+xPositionChange;
-				else if(levelPosX+xPositionChange < screenWidth/areaScale-terrain.canvas.width)
-					xPositionChange -= (levelPosX+xPositionChange)-(screenWidth/areaScale-terrain.canvas.width);
+				else if(levelPosX+xPositionChange < Screen.width/areaScale-Terrain.canvas.width)
+					xPositionChange -= (levelPosX+xPositionChange)-(Screen.width/areaScale-Terrain.canvas.width);
 			} else
-				xPositionChange -= (levelPosX+xPositionChange)-(screenWidth/areaScale-terrain.canvas.width)/2;
-			if(terrain.canvas.height*areaScale > screenHeight){
+				xPositionChange -= (levelPosX+xPositionChange)-(Screen.width/areaScale-Terrain.canvas.width)/2;
+			if(Terrain.canvas.height*areaScale > Screen.height){
 				if(levelPosY+yPositionChange > 0)
 					yPositionChange -= levelPosY+yPositionChange;
-				else if(levelPosY+yPositionChange < screenHeight/areaScale-terrain.canvas.height)
-					yPositionChange -= (levelPosY+yPositionChange)-(screenHeight/areaScale-terrain.canvas.height);
+				else if(levelPosY+yPositionChange < Screen.height/areaScale-Terrain.canvas.height)
+					yPositionChange -= (levelPosY+yPositionChange)-(Screen.height/areaScale-Terrain.canvas.height);
 			} else
-				yPositionChange -= (levelPosY+yPositionChange)-(screenHeight/areaScale-terrain.canvas.height)/2;
+				yPositionChange -= (levelPosY+yPositionChange)-(Screen.height/areaScale-Terrain.canvas.height)/2;
 		}*/
 		levelPosX += xPositionChange;
 		levelPosY += yPositionChange;
@@ -2206,28 +2183,28 @@ for(let step = Game.steps; step >= 1; step--){
 	//Rendering everything
 	if(!Game.noBounds){
 		gameRender.fillStyle = "#00000020"; //Out of bounds area color
-		gameRender.fillRect(0, 0, screenWidth, screenHeight); //Out of bounds area
+		gameRender.fillRect(0, 0, Screen.width, Screen.height); //Out of bounds area
 	}
 	
 	if(Game.mode===GameMode.adventure){
 		for(let l = 0; l < Levels.length; l++){ //floor(pos) and ceil(size) prevent vertical lines (Out of bounds area color)
 			let scaledLevelPosX = Math.floor((levelPosX+Levels[l].xOffset)*areaScale), scaledLevelPosY = Math.floor((levelPosY+Levels[l].yOffset)*areaScale);
 			let scaledLevelWidth = Math.ceil(Levels[l].canvas.width*areaScale), scaledLevelHeight = Math.ceil(Levels[l].canvas.height*areaScale);
-			if(scaledLevelPosX<screenWidth && scaledLevelPosX+scaledLevelWidth>0 && scaledLevelPosY<screenHeight && scaledLevelPosY+scaledLevelHeight>0){ //off-screen canvases are not rendered
+			if(scaledLevelPosX<Screen.width && scaledLevelPosX+scaledLevelWidth>0 && scaledLevelPosY<Screen.height && scaledLevelPosY+scaledLevelHeight>0){ //off-screen canvases are not rendered
 				gameRender.clearRect(scaledLevelPosX, scaledLevelPosY, scaledLevelWidth, scaledLevelHeight);
 				gameRender.drawImage(Levels[l].canvas,0,0,Levels[l].canvas.width,Levels[l].canvas.height,scaledLevelPosX,scaledLevelPosY,scaledLevelWidth,scaledLevelHeight);
 			}
 		}
 	} else {
 		let scaledLevelPosX = levelPosX*areaScale, scaledLevelPosY = levelPosY*areaScale;
-		let scaledLevelWidth = terrain.canvas.width*areaScale, scaledLevelHeight = terrain.canvas.height*areaScale;
+		let scaledLevelWidth = Terrain.canvas.width*areaScale, scaledLevelHeight = Terrain.canvas.height*areaScale;
 		
 		gameRender.clearRect(scaledLevelPosX, scaledLevelPosY, scaledLevelWidth, scaledLevelHeight);
-		gameRender.drawImage(terrain.canvas,0,0,terrain.canvas.width,terrain.canvas.height,scaledLevelPosX,scaledLevelPosY,scaledLevelWidth,scaledLevelHeight);
+		gameRender.drawImage(Terrain.canvas,0,0,Terrain.canvas.width,Terrain.canvas.height,scaledLevelPosX,scaledLevelPosY,scaledLevelWidth,scaledLevelHeight);
 	}
 	
 	if(IngamePlayers.length>1){
-		gameRender.lineWidth = 3*Game.guiScale;
+		gameRender.lineWidth = 3*Screen.guiScale;
 		gameRender.setLineDash([]);
 	}
 	for(let p = 0; p < IngamePlayers.length; p++){
@@ -2239,7 +2216,7 @@ for(let step = Game.steps; step >= 1; step--){
 		if(IngamePlayers.length>1){
 			gameRender.beginPath();
 			gameRender.arc((player.playerPosX+player.playerRadius)*areaScale,(player.playerPosY+player.playerRadius)*areaScale,(player.playerRadius)*areaScale,0,2*Math.PI);
-			gameRender.strokeStyle = PlayerColors[player.number].color;
+			gameRender.strokeStyle = PlayerColor[player.number].color;
 			gameRender.stroke();
 		}
 		gameRender.globalAlpha = 1;
@@ -2252,8 +2229,8 @@ for(let step = Game.steps; step >= 1; step--){
 		for(let b = 0; b < player.Balls.length; b++)
 			gameRender.drawImage(player.Balls[b].canvas,0,0,player.Balls[b].canvas.width,player.Balls[b].canvas.height,player.Balls[b].ballPosX*areaScale,player.Balls[b].ballPosY*areaScale,player.Balls[b].canvas.width*areaScale,player.Balls[b].canvas.height*areaScale);
 	}
-	gameRender.lineWidth = 3*Game.guiScale;
-	gameRender.setLineDash([5*Game.guiScale,10*Game.guiScale]);
+	gameRender.lineWidth = 3*Screen.guiScale;
+	gameRender.setLineDash([5*Screen.guiScale,10*Screen.guiScale]);
 	for(let p = 0; p < IngamePlayers.length; p++){
 		let player = IngamePlayers[p];
 		
@@ -2261,11 +2238,11 @@ for(let step = Game.steps; step >= 1; step--){
 			gameRender.beginPath();
 			gameRender.moveTo((player.playerPosX+player.playerRadius)*areaScale,(player.playerPosY+player.playerRadius)*areaScale);
 			gameRender.lineTo(player.aimX*areaScale,player.aimY*areaScale);
-			gameRender.strokeStyle = PlayerColors[player.number].color;
+			gameRender.strokeStyle = PlayerColor[player.number].color;
 			gameRender.stroke();
 			let crossOffsetX = Crosshair[player.number].xOffset;
 			let crossOffsetY = Crosshair[player.number].yOffset;
-			gameRender.drawImage(Crosshair[player.number],0,0,crossOffsetX*2,crossOffsetY*2,(player.aimX*areaScale)-crossOffsetX*Game.guiScale,(player.aimY*areaScale)-crossOffsetY*Game.guiScale,crossOffsetX*2*Game.guiScale,crossOffsetY*2*Game.guiScale); //crosshair scales with resolution
+			gameRender.drawImage(Crosshair[player.number],0,0,crossOffsetX*2,crossOffsetY*2,(player.aimX*areaScale)-crossOffsetX*Screen.guiScale,(player.aimY*areaScale)-crossOffsetY*Screen.guiScale,crossOffsetX*2*Screen.guiScale,crossOffsetY*2*Screen.guiScale); //crosshair scales with resolution
 			//gameRender.drawImage(Crosshair[player.number],(player.aimX*areaScale)-crossOffsetX,(player.aimY*areaScale)-crossOffsetY); //crosshair does not scale with resolution
 		}
 	}
@@ -2274,7 +2251,7 @@ for(let step = Game.steps; step >= 1; step--){
 			let player = IngamePlayers[p];
 			
 			if(player.statusVisibility > 0){
-				gameRender.fillStyle = PlayerColors[player.number].color;
+				gameRender.fillStyle = PlayerColor[player.number].color;
 				gameRender.font = Math.max(player.playerHeight*areaScale,30)+"px Arial";
 				gameRender.textAlign = "center";
 				gameRender.fillText(((Game.type===GameType.score) ? player.score : player.lives),(player.playerPosX+player.playerRadius)*areaScale,player.playerPosY*areaScale);
@@ -2282,7 +2259,7 @@ for(let step = Game.steps; step >= 1; step--){
 		}
 	}
 }
-let logo = [
+const logo = [
 [1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1],
 [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
 [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
@@ -2297,7 +2274,7 @@ let logo = [
 [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
 [1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1]
 ];
-let adventureText = [
+const adventureText = [
 [0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,0,1,0,0,1,1,0,1,0,1,0,0,1,0,0,1,1,0,0,1,1,1,0,1,0,1,0,1,1,1,0,0,1,0],
 [1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0,0,1,0,1,0,1,1,0,0,1,0,1],
@@ -2305,7 +2282,7 @@ let adventureText = [
 [1,0,0,1,0,0,1,1,0,0,1,0,0,1,0,0,0,1,0,1,0,0,1,1,0,0,1,1,0,1,0,0,0,1,0,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1]
 ];
-let startText = [
+const startText = [
 [0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0],
 [1,0,0,0,1,1,1,0,0,1,1,0,1,1,1,0,1,1,1],
 [0,1,0,0,0,1,0,0,1,0,1,0,1,1,0,0,0,1,0],
@@ -2313,7 +2290,7 @@ let startText = [
 [1,1,0,0,0,1,1,0,1,0,1,0,1,0,0,0,0,1,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let battleText = [
+const battleText = [
 [1,1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0],
 [1,0,1,0,0,1,1,0,1,1,1,0,1,1,1,0,1,0,0,1,0],
 [1,1,1,0,1,0,1,0,0,1,0,0,0,1,0,0,1,0,1,0,1],
@@ -2321,7 +2298,7 @@ let battleText = [
 [1,1,0,0,1,0,1,0,0,1,1,0,0,1,1,0,1,0,1,0,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1]
 ];
-let gameTypeText = [
+const gameTypeText = [
 [0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,0,0,0,0,1,1,0,1,1,1,1,0,0,0,1,0,0,0,0,1,1,1,0,1,0,1,0,1,1,0,0,0,1,0],
 [1,0,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1,0,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2329,7 +2306,7 @@ let gameTypeText = [
 [0,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,0,0,1,1,0,0,0,1,0,1,1,0,0,1,0,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1,1,0,0,1,0,0,0,0,1,1]
 ];
-let winScoreText = [
+const winScoreText = [
 [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
 [1,0,1,0,1,0,1,0,1,1,0,0,0,0,1,1,0,0,1,0,0,1,0,0,0,1,0,1,0,1],
 [1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,0,1,0,0,1,0,1,0,1,0,0,1,1,1],
@@ -2337,7 +2314,7 @@ let winScoreText = [
 [0,1,0,1,0,0,1,0,1,0,1,0,0,0,1,1,0,0,1,0,0,1,0,0,1,0,0,0,1,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let lifeCountText = [
+const lifeCountText = [
 [1,0,0,0,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
 [1,0,0,0,1,0,1,0,0,0,1,0,1,0,0,0,0,1,0,0,1,0,0,1,0,1,0,1,1,0,0,1,1,1],
 [1,0,0,0,1,0,1,1,0,0,1,1,1,0,0,0,1,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0],
@@ -2345,7 +2322,7 @@ let lifeCountText = [
 [1,1,1,0,1,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,1,0,0,0,1,1,0,1,0,1,0,0,1,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let shotSpeedText = [
+const shotSpeedText = [
 [0,1,1,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,1],
 [1,0,0,0,1,1,0,0,0,1,0,0,1,1,1,0,0,0,1,1,0,1,1,0,0,1,0,1,0,1,0,1,0,0,1,1],
 [0,1,0,0,1,0,1,0,1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,1,0,1,1,1,0,1,1,1,0,1,0,1],
@@ -2353,7 +2330,7 @@ let shotSpeedText = [
 [1,1,0,0,1,0,1,0,0,1,0,0,0,1,1,0,0,0,1,1,0,1,1,0,0,0,1,1,0,0,1,1,0,0,1,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let infiniteJumpText = [
+const infiniteJumpText = [
 [1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,1,1,0,0,1,0,0,1,0,1,1,0,0,1,0,1,1,1,0,0,1,0,0,0,0,0,0,1,0,1,0,1,0,1,1,1,1,0,0,1,1,0],
 [1,0,1,0,1,0,1,1,0,1,0,1,0,1,0,1,0,0,1,0,0,1,0,1,0,0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2361,7 +2338,7 @@ let infiniteJumpText = [
 [1,0,1,0,1,0,1,0,0,1,0,1,0,1,0,1,0,0,1,1,0,1,0,0,0,0,0,0,1,0,0,0,1,1,0,1,0,1,0,1,0,1,1,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0]
 ];
-let knockBackText = [
+const knockBackText = [
 [1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0],
 [1,1,0,1,0,0,1,0,0,0,0,1,0,1,0,1,1,0,0,0,1,0,0,0,1,0,1,0,1,0,1,1,0,0,0,1,1,0,0,1,0,1,0,1],
 [1,1,1,1,0,1,0,1,0,0,0,1,1,0,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0],
@@ -2369,7 +2346,7 @@ let knockBackText = [
 [1,0,0,1,0,0,1,0,0,0,0,1,0,1,0,1,0,1,0,0,1,0,0,0,1,0,1,0,1,0,1,1,0,0,1,0,1,0,0,1,0,1,0,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let instantChargeText = [
+const instantChargeText = [
 [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
 [1,0,1,1,0,0,1,1,0,1,1,1,0,0,1,1,0,1,1,0,0,1,1,1,0,0,0,0,1,0,1,1,0,0,0,1,1,0,0,1,0,1,1,1,0,1,0,1],
 [1,0,1,0,1,0,1,0,0,0,1,0,0,1,0,1,0,1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1,1,1],
@@ -2377,7 +2354,7 @@ let instantChargeText = [
 [1,0,1,0,1,0,1,1,0,0,1,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1,0,0,1,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0]
 ];
-let fixedCameraText = [
+const fixedCameraText = [
 [1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],
 [1,0,0,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,0,0,1,0,0,1,1,0,1,1,1,1,0,0,1,0,1,0,0,1,0,0,1,1],
 [1,1,1,0,1,0,0,1,0,0,1,1,1,0,1,0,1,0,0,0,1,0,0,1,0,1,0,1,0,1,0,1,0,1,1,1,0,1,0,0,1,0,1],
@@ -2385,7 +2362,7 @@ let fixedCameraText = [
 [1,0,0,0,1,0,1,0,1,0,0,1,1,0,0,1,1,0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,1,0,0,1,0,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let noPile1Text = [
+const noPile1Text = [
 [0,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0],
 [1,0,0,0,1,1,0,0,0,1,0,0,0,1,0,0,1,1,1,0,0,0,1,1,1,0,1,1,0,0,0,1,0,0,1,0,0,1,0,1,0,1,1,1,0,1,1,0],
 [0,1,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,1,0,1,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2393,7 +2370,7 @@ let noPile1Text = [
 [1,1,0,0,1,0,1,0,0,1,0,0,0,1,0,0,0,1,1,0,0,0,0,1,1,0,1,0,1,0,1,0,0,0,1,0,0,0,1,1,0,0,0,1,0,1,0,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0]
 ];
-let noPile2Text = [
+const noPile2Text = [
 [0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1,0,1,1,1,0,1,1,0,0,1,0,1,1,0,0,1,1,1],
 [1,1,1,0,1,0,1,0,1,1,1,0,1,0,0,1,0,1,0,0,1,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2401,7 +2378,7 @@ let noPile2Text = [
 [0,1,1,0,0,1,0,0,0,1,1,0,1,0,0,1,0,0,0,0,1,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0]
 ];
-let stageSelectText = [
+const stageSelectText = [
 [0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,1,0],
 [1,0,0,0,1,1,1,0,0,1,1,0,1,1,1,0,1,0,1,0,0,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,1,1],
 [0,1,0,0,0,1,0,0,1,0,1,0,1,0,1,0,1,1,1,0,0,0,0,1,0,0,1,1,1,0,1,0,1,1,1,0,1,0,0,0,1,0],
@@ -2409,7 +2386,7 @@ let stageSelectText = [
 [1,1,0,0,0,1,1,0,1,0,1,0,0,0,1,0,0,1,1,0,0,0,1,1,0,0,0,1,1,0,1,0,0,1,1,0,0,1,0,0,1,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let optionsText = [
+const optionsText = [
 [0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,0,1,0,1,1,0,0,1,1,1,0,1,0,0,1,0,0,1,1,0,0,1,1,0],
 [1,0,0,1,0,1,0,1,0,0,1,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0],
@@ -2417,7 +2394,7 @@ let optionsText = [
 [0,1,1,0,0,1,1,0,0,0,1,1,0,1,0,0,1,0,0,1,0,1,0,1,1,0],
 [0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let collisionQualityText = [
+const collisionQualityText = [
 [0,1,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0],
 [1,0,0,0,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,0,1,1,0,0,0,0,1,0,0,1,0,1,0,1,0,0,1,1,0,1,0,1,0,1,1,1,0,1,0,1],
 [1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0,0,1,0,1],
@@ -2425,7 +2402,7 @@ let collisionQualityText = [
 [0,1,1,0,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,0,1,0,1,0,0,0,0,1,1,0,0,0,1,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,0,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0]
 ];
-let soundVolumeText = [
+const soundVolumeText = [
 [0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,0,0,0,1,0,0,1,0,1,0,1,1,0,0,0,1,1,0,0,0,1,0,1,0,0,1,0,0,1,0,1,0,1,0,1,1,1,1,0,0,0,1,0],
 [0,1,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2433,7 +2410,7 @@ let soundVolumeText = [
 [1,1,0,0,0,1,0,0,0,1,1,0,1,0,1,0,0,1,1,0,0,0,0,1,0,0,0,1,0,0,1,0,0,1,1,0,1,0,1,0,1,0,1,0,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1]
 ];
-let guiScaleText = [
+const guiScaleText = [
 [0,1,1,1,0,1,0,1,0,1,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0],
 [1,0,0,0,0,1,0,1,0,1,0,0,1,0,0,0,0,1,0,0,1,1,0,1,0,0,1,0],
 [1,0,1,1,0,1,0,1,0,1,0,0,0,1,0,0,1,0,0,1,0,1,0,1,0,1,0,1],
@@ -2441,7 +2418,7 @@ let guiScaleText = [
 [0,1,1,1,0,0,1,1,0,1,0,0,1,1,0,0,0,1,0,1,0,1,0,1,0,1,0,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1]
 ];
-let vsyncText = [
+const vsyncText = [
 [1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,1,0,0,0,0,1,1,0,1,0,1,0,1,1,0,0,0,1,1],
 [1,0,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1,0,1,0,0],
@@ -2449,42 +2426,42 @@ let vsyncText = [
 [0,1,0,0,0,0,0,1,1,0,0,0,1,0,1,0,1,0,0,1,1],
 [0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0]
 ];
-let Adjust = [
+const Adjust = [
 [0,0,1,0,0,0,0,0,0,0,0,1,0,0],
 [0,1,0,0,0,0,0,0,0,0,0,0,1,0],
 [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
 [0,1,0,0,0,0,0,0,0,0,0,0,1,0],
 [0,0,1,0,0,0,0,0,0,0,0,1,0,0]
 ];
-let Enable = [
+const Enable = [
 [1,0,0,0,1],
 [0,1,0,1,0],
 [0,0,1,0,0],
 [0,1,0,1,0],
 [1,0,0,0,1]
 ];
-let Disable = [
+const Disable = [
 [0,0,0,0,0],
 [0,0,0,0,0],
 [0,0,0,0,0],
 [0,0,0,0,0],
 [0,0,0,0,0]
 ];
-let Plus = [
+const Plus = [
 [0,0,0,0,0],
 [0,0,1,0,0],
 [0,1,1,1,0],
 [0,0,1,0,0],
 [0,0,0,0,0]
 ];
-let Minus = [
+const Minus = [
 [0,0,0,0,0],
 [0,0,0,0,0],
 [0,1,1,1,0],
 [0,0,0,0,0],
 [0,0,0,0,0]
 ];
-let Numbers = [
+const Numbers = [
 [[1,1,1],[1,0,1],[1,0,1],[1,0,1],[1,1,1]], //Zero
 [[0,0,1],[0,0,1],[0,0,1],[0,0,1],[0,0,1]], //One
 [[1,1,1],[0,0,1],[1,1,1],[1,0,0],[1,1,1]], //Two
@@ -2496,7 +2473,7 @@ let Numbers = [
 [[1,1,1],[1,0,1],[1,1,1],[1,0,1],[1,1,1]], //Eight
 [[1,1,1],[1,0,1],[1,1,1],[0,0,1],[1,1,1]] //Nine
 ];
-let upKeyText = [
+const upKeyText = [
 [1,0,0,1,0,0,0,0],
 [1,0,0,1,0,1,1,0],
 [1,0,0,1,0,1,0,1],
@@ -2504,7 +2481,7 @@ let upKeyText = [
 [0,1,1,0,0,1,1,0],
 [0,0,0,0,0,1,0,0]
 ];
-let downKeyText = [
+const downKeyText = [
 [1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,0,1,0,0,1,0,0,1,0,0,0,1,0,1,1,0],
 [1,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2512,7 +2489,7 @@ let downKeyText = [
 [1,1,1,0,0,0,1,0,0,0,1,0,1,0,0,1,0,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let leftKeyText = [
+const leftKeyText = [
 [1,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,0,0,0,1,0,0,0,1,1,0,1,0],
 [1,0,0,0,1,0,1,0,1,0,0,1,1,1],
@@ -2520,7 +2497,7 @@ let leftKeyText = [
 [1,0,0,0,1,0,0,0,1,0,0,0,1,0],
 [1,1,1,0,0,1,1,0,1,0,0,0,1,1]
 ];
-let rightKeyText = [
+const rightKeyText = [
 [1,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0],
 [1,0,1,0,1,0,1,1,1,0,1,1,0,1,1,1],
 [1,1,0,0,1,0,1,0,1,0,1,0,1,0,1,0],
@@ -2528,7 +2505,7 @@ let rightKeyText = [
 [1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,1],
 [0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0]
 ];
-let jumpKeyText = [
+const jumpKeyText = [
 [0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [0,0,1,0,1,0,1,0,1,1,1,1,0,0,1,1,0],
 [0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2536,7 +2513,7 @@ let jumpKeyText = [
 [0,1,0,0,0,1,1,0,1,0,1,0,1,0,1,1,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0]
 ];
-let chargeKeyText = [
+const chargeKeyText = [
 [0,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,0,0,1,1,0,0,0,1,1,0,0,1,0,1,1,1,0,0,1,0,0,0,0,1,0,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0],
 [1,0,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1,0,1,0,0,1,0,1,0,0,0,1,1,0,0,0,1,0,0,0,1,0,1,1,1],
@@ -2544,7 +2521,7 @@ let chargeKeyText = [
 [0,1,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1,0,1,0,0,0,1,0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,1,0,0,1,1,0,0,1,0,1,0,0,1,0,0,0,1,0,0,1,1]
 ];
-let chargeHoldKeyText = [
+const chargeHoldKeyText = [
 [1,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,1,0,0,1,0,0,1,0,0,1,1,0,0,0,1,0,0,0,1,1,0,0,0,1,1,0,0,1,0,1,1,1,0,0,1,0],
 [1,1,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1,0,1],
@@ -2552,7 +2529,7 @@ let chargeHoldKeyText = [
 [1,0,1,0,0,1,0,0,1,0,0,1,1,0,0,0,0,1,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1,0,1,0,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,1]
 ];
-let confirmKeyText = [
+const confirmKeyText = [
 [0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0],
 [1,0,0,0,1,0,0,1,1,0,0,1,0,0,1,0,0,1,0,1,1,1,1,0],
@@ -2560,7 +2537,7 @@ let confirmKeyText = [
 [1,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,0,1,0,1,0,1],
 [0,1,1,0,1,0,0,1,0,1,0,1,0,0,1,0,1,0,0,1,0,1,0,1]
 ];
-let cancelKeyText = [
+const cancelKeyText = [
 [0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
 [1,0,0,0,0,1,1,0,1,1,0,0,0,1,0,0,1,0,0,1],
 [1,0,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1],
@@ -2568,7 +2545,7 @@ let cancelKeyText = [
 [0,1,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,0,0,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0]
 ];
-let pauseKeyText = [
+const pauseKeyText = [
 [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,1,0,0,1,1,0,1,0,1,0,1,1,0,0,1,0],
 [1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1],
@@ -2576,7 +2553,7 @@ let pauseKeyText = [
 [1,0,0,0,1,0,1,0,0,1,1,0,1,1,0,1,0,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1]
 ];
-let negativeAimXText = [
+const negativeAimXText = [
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
 [0,0,0,0,0,1,1,0,1,0,1,1,1,1,0,0,1,0,1],
 [1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0],
@@ -2584,7 +2561,7 @@ let negativeAimXText = [
 [0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let positiveAimXText = [
+const positiveAimXText = [
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
 [0,1,0,0,0,1,1,0,1,0,1,1,1,1,0,0,1,0,1],
 [1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0],
@@ -2592,7 +2569,7 @@ let positiveAimXText = [
 [0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let negativeAimYText = [
+const negativeAimYText = [
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
 [0,0,0,0,0,1,1,0,1,0,1,1,1,1,0,0,1,0,1],
 [1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2600,7 +2577,7 @@ let negativeAimYText = [
 [0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let positiveAimYText = [
+const positiveAimYText = [
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
 [0,1,0,0,0,1,1,0,1,0,1,1,1,1,0,0,1,0,1],
 [1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2608,7 +2585,7 @@ let positiveAimYText = [
 [0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let pausedText = [
+const pausedText = [
 [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
 [1,0,1,0,0,1,1,0,1,0,1,0,1,1,0,0,1,0,0,0,1,1],
 [1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1,0,1],
@@ -2616,7 +2593,7 @@ let pausedText = [
 [1,0,0,0,1,0,1,0,0,1,1,0,1,1,0,1,0,0,0,0,1,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0]
 ];
-let continueText = [
+const continueText = [
 [1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,1,0,0,1,0,0,1,1,1,0,1,0,1,0,1,1,1,0,1,1,0],
 [1,0,1,0,1,0,1,0,0,1,0,0,1,0,1,0,1,1,0,0,1,0,1],
@@ -2624,7 +2601,7 @@ let continueText = [
 [1,0,1,0,1,0,0,0,0,1,1,0,0,1,1,0,1,0,0,0,1,0,1],
 [1,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let mainMenuText = [
+const mainMenuText = [
 [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,1,0,1,1,0,0,1,1,0,1,0,1,1,0,0,1,1,0,1,1,0,0,1,0,0,1,1,0,0,1,0,1],
 [1,1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2632,7 +2609,7 @@ let mainMenuText = [
 [1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0,0,0,1,0,1,0,0,1,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0]
 ];
-let exitGameText = [
+const exitGameText = [
 [1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,0,0,1,0,1,0,1,0,1,1,1,0,0,0,1,0,0,0,0,0,1,1,0,1,1,1,1,0,0,0,1,0],
 [1,1,1,0,0,1,0,0,1,0,0,1,0,0,0,0,1,0,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
@@ -2640,7 +2617,7 @@ let exitGameText = [
 [1,1,1,0,1,0,1,0,1,0,0,1,1,0,0,0,0,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1]
 ];
-let exitToMainMenuText = [
+const exitToMainMenuText = [
 [1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
 [1,0,0,0,1,0,1,0,1,0,1,1,1,0,0,0,1,1,1,0,0,1,0,0,0,0,1,1,0,1,1,0,0,1,1,0,1,0,1,1,0,0,1,1,0,1,1,0,0,1,0,0,1,1,0,0,1,0,1,0,1,0,1],
 [1,1,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,1,0,0,0,1,1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1],
@@ -2648,7 +2625,7 @@ let exitToMainMenuText = [
 [1,1,1,0,1,0,1,0,1,0,0,1,1,0,0,0,0,1,1,0,0,1,0,0,0,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0,0,0,1,0,1,0,0,1,1,0,0,0,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0]
 ];
-let exitToStageSelectText = [
+const exitToStageSelectText = [
 [1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,1,0,0,0,1,0],
 [1,0,0,0,1,0,1,0,1,0,1,1,1,0,0,0,1,1,1,0,0,1,0,0,0,0,1,0,0,0,1,1,1,0,0,1,1,0,1,1,1,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,1,1,0,1,0,1],
 [1,1,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0,0,1,0,0,1,0,1,0,1,0,1,0,1,1,1,0,0,1,0,0,1,1,1,0,1,0,1,1,1,0,1,0,0,0,1,0,0,0,0,1],
@@ -2656,7 +2633,7 @@ let exitToStageSelectText = [
 [1,1,1,0,1,0,1,0,1,0,0,1,1,0,0,0,0,1,1,0,0,1,0,0,0,0,1,1,0,0,0,1,1,0,1,0,1,0,0,0,1,0,0,1,1,0,1,1,0,0,0,1,1,0,1,0,0,1,1,0,0,1,0,0,1,1,0,0,0,0],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0]
 ];
-let yesText = [
+const yesText = [
 [1,0,1,0,0,0,0,0,0,0,0],
 [1,0,1,0,0,1,0,0,0,1,1],
 [1,0,1,0,1,0,1,0,1,0,0],
@@ -2664,7 +2641,7 @@ let yesText = [
 [0,1,0,0,1,0,0,0,0,0,1],
 [0,1,0,0,0,1,1,0,1,1,0]
 ];
-let noText = [
+const noText = [
 [1,0,0,0,1,0,0,0,0,0],
 [1,1,0,0,1,0,0,1,1,0],
 [1,1,1,0,1,0,1,0,0,1],
@@ -2672,7 +2649,7 @@ let noText = [
 [1,0,0,1,1,0,1,0,0,1],
 [1,0,0,0,1,0,0,1,1,0]
 ];
-let confirmPlayersText = [
+const confirmPlayersText = [
 [0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
 [1,0,0,0,0,1,0,0,1,1,0,0,1,0,0,1,0,0,1,0,1,1,1,1,0,0,0,0,1,0,1,0,1,0,0,1,1,0,1,0,1,0,1,0,1,0,0,1,0,1,1],
 [1,0,0,0,1,0,1,0,1,0,1,0,1,1,0,1,0,1,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,0,1,0,0,1,0],
@@ -2680,7 +2657,7 @@ let confirmPlayersText = [
 [0,1,1,0,0,1,0,0,1,0,1,0,1,0,0,1,0,1,0,0,1,0,1,0,1,0,0,0,1,0,0,0,1,0,1,0,1,0,1,0,0,0,0,1,1,0,1,0,0,1,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
-let resultsText = [
+const resultsText = [
 [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 [1,0,1,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0],
 [1,0,1,0,1,0,1,0,1,1,0,1,0,1,0,1,0,1,1,1,0,1,1],
@@ -2688,7 +2665,7 @@ let resultsText = [
 [1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,1,0,0,1,0,0,0,1],
 [1,0,1,0,0,1,1,0,1,1,0,0,1,1,0,1,0,0,1,1,0,1,1]
 ];
-let WinnerTexts = [
+const WinnerTexts = [
 [
 	[0,1,0,0,0,0,0,1,0],
 	[1,1,0,1,1,0,1,1,1],
@@ -2718,7 +2695,7 @@ let WinnerTexts = [
 	[0,0,1,0,0,1,1,0,1,0,1]
 ]
 ];
-let rematchText = [
+const rematchText = [
 [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0],
 [1,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0],
 [1,0,1,0,1,0,1,0,1,1,1,1,0,0,0,1,1,0,1,1,1,0,0,1,0,1,1,0],
@@ -2726,7 +2703,7 @@ let rematchText = [
 [1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,1,1,0,0,1,0,0,1,0,0,1,0,1],
 [1,0,1,0,0,1,1,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,1,0,1,0,1]
 ];
-let stageSelectSmallText = [
+const stageSelectSmallText = [
 [0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,1,0],
 [1,0,0,0,1,1,1,0,0,1,1,0,1,1,1,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,1,1],
 [0,1,0,0,0,1,0,0,1,0,1,0,1,0,1,0,1,1,1,0,0,1,0,0,1,1,1,0,1,0,1,1,1,0,1,0,0,0,1,0],
@@ -2735,13 +2712,13 @@ let stageSelectSmallText = [
 [0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
 
-let GUIstate = {
+const GUIstate = {
 	Enabled:0,
 	Disabled:1,
 	Hidden:2
 };
 
-let GUI = {
+const GUI = {
 logo:{data:logo, xDiff:-430, yDiff:-288, textWidth:10, textHeight:9, textXoffset:1, textYoffset:1, textXgap:1, textYgap:1, textColor:"#FFFFFF", bgColor:"#00000000", drawStarted:false, secret:false},
 main:{
 	run(){MainMenu();},
@@ -2788,32 +2765,32 @@ battle:{
 		}
 	],
 	adjustbox:[
-		{data:Adjust, name:"winScore", xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
+		{data:Adjust, prop:[Game,"winScore"], xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
 			number:[
 				{data:Numbers[5], xDiff:51, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:31, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:11, textYoffset:4, textWidth:5, textHeight:4}
 			]
 		},
-		{data:Adjust, name:"lifeCount", xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
+		{data:Adjust, prop:[Game,"lifeCount"], xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
 			number:[
 				{data:Numbers[3], xDiff:51, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:31, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:11, textYoffset:4, textWidth:5, textHeight:4}
 			]
 		},
-		{data:Adjust, name:"shotSpeed", xDiff:-251, yDiff:25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
+		{data:Adjust, prop:[Game,"shotSpeed"], xDiff:-251, yDiff:25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
 			number:[
 				{data:Numbers[5], xDiff:37, textYoffset:4, textWidth:5, textHeight:4}
 			]
 		}
 	],
 	checkbox:[
-		{data:Disable, name:"infiniteJump", xDiff:-197, yDiff:70, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
-		{data:Disable, name:"noKnockback", xDiff:-197, yDiff:115, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
-		{data:Disable, name:"instantCharge", xDiff:-197, yDiff:160, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
-		{data:Disable, name:"fixedCamera", xDiff:-197, yDiff:205, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
-		{data:Disable, name:"noPile", xDiff:-197, yDiff:250, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4}
+		{data:Disable, prop:[Game,"infiniteJump"], xDiff:-197, yDiff:70, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
+		{data:Disable, prop:[Game,"noKnockback"], xDiff:-197, yDiff:115, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
+		{data:Disable, prop:[Game,"instantCharge"], xDiff:-197, yDiff:160, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
+		{data:Disable, prop:[Game,"fixedCamera"], xDiff:-197, yDiff:205, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4},
+		{data:Disable, prop:[Game,"noPile"], xDiff:-197, yDiff:250, width:37, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4}
 	],
 	button:[
 		{data:Minus, xDiff:-140, yDiff:-147, width:60, height:52, textXoffset:3, textYoffset:2},
@@ -2851,14 +2828,14 @@ options:{
 		{data:positiveAimYText, xDiff:-270, yDiff:251, textWidth:4, textHeight:3}
 	],
 	adjustbox:[
-		{data:Adjust, name:"updateInterval", xDiff:-103, yDiff:-62, width:161, height:57, textXoffset:4, textYoffset:4,
+		{data:Adjust, prop:[Game,"updateInterval"], xDiff:-103, yDiff:-62, width:161, height:57, textXoffset:4, textYoffset:4,
 			number:[
 				{data:Numbers[0], xDiff:90, textYoffset:4},
 				{data:Numbers[0], xDiff:54, textYoffset:4},
 				{data:Numbers[1], xDiff:17, textYoffset:4}
 			]
 		}, //collisionQuality
-		{data:Adjust, name:"soundVolume", xDiff:-103, yDiff:0, width:161, height:57, textXoffset:4, textYoffset:4,
+		{data:Adjust, prop:[Game,"soundVolume"], xDiff:-103, yDiff:0, width:161, height:57, textXoffset:4, textYoffset:4,
 			number:[
 				{data:Numbers[0], xDiff:90, textYoffset:4},
 				{data:Numbers[0], xDiff:54, textYoffset:4},
@@ -2867,10 +2844,10 @@ options:{
 		}
 	],
 	checkbox:[
-		{data:Enable, name:"guiScaleOn", xDiff:-103, yDiff:71, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5},
-		{data:Enable, name:"vsync", xDiff:-317, yDiff:71, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5}
+		{data:Enable, prop:[Screen,"guiScaleOn"], xDiff:-103, yDiff:71, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5},
+		{data:Enable, prop:[Screen,"vsync"], xDiff:-317, yDiff:71, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5}
 	],
-	inputfield:[ //keyBinding inputfield
+	inputfield:[ //keyBind inputfield
 		{data:null, inputType:Input.up, xDiff:200, yDiff:-139, width:199, height:40, pTextAlign:"right", pFontSize:30, pTextXoffset:-6, pTextYoffset:-10,
 			button:[{data:Plus, xDiff:201, width:39, height:40, textYoffset:3, textWidth:7, textHeight:6}]},
 		{data:null, inputType:Input.down, xDiff:200, yDiff:-97, width:199, height:40, pTextAlign:"right", pFontSize:30, pTextXoffset:-6, pTextYoffset:-10,
@@ -2901,10 +2878,10 @@ options:{
 			button:[{data:Plus, xDiff:118, width:39, height:36, textYoffset:1, textWidth:7, textHeight:6}]}
 	],
 	button:[
-		{data:Numbers[1],player:1,xDiff:-150,yDiff:-155,width:52,height:41,textXoffset:9,textYoffset:6,textWidth:6,textHeight:5,borderColor:PlayerColors[1].color}, //playerButton1
-		{data:Numbers[2],player:2,xDiff:-98,yDiff:-155,width:52,height:41,textXoffset:16,textYoffset:6,textWidth:6,textHeight:5,borderColor:PlayerColors[2].color}, //playerButton2
-		{data:Numbers[3],player:3,xDiff:-46,yDiff:-155,width:52,height:41,textXoffset:16,textYoffset:6,textWidth:6,textHeight:5,borderColor:PlayerColors[3].color}, //playerButton3
-		{data:Numbers[4],player:4,xDiff:6,yDiff:-155,width:52,height:41,textXoffset:16,textYoffset:6,textWidth:6,textHeight:5,borderColor:PlayerColors[4].color} //playerButton4
+		{data:Numbers[1],player:1,xDiff:-150,yDiff:-155,width:52,height:41,textXoffset:9,textYoffset:6,textWidth:6,textHeight:5,borderColor:PlayerColor[1].color}, //playerButton1
+		{data:Numbers[2],player:2,xDiff:-98,yDiff:-155,width:52,height:41,textXoffset:16,textYoffset:6,textWidth:6,textHeight:5,borderColor:PlayerColor[2].color}, //playerButton2
+		{data:Numbers[3],player:3,xDiff:-46,yDiff:-155,width:52,height:41,textXoffset:16,textYoffset:6,textWidth:6,textHeight:5,borderColor:PlayerColor[3].color}, //playerButton3
+		{data:Numbers[4],player:4,xDiff:6,yDiff:-155,width:52,height:41,textXoffset:16,textYoffset:6,textWidth:6,textHeight:5,borderColor:PlayerColor[4].color} //playerButton4
 	],
 	dropdown:[
 		{data:null,activeItem:0,selectedItem:0,xDiff:-150,yDiff:-117,width:208,height:37,pTextAlign:"left",pFontSize:20,pTextXoffset:10,pTextYoffset:-12,
@@ -2940,17 +2917,17 @@ results:{
 	run(){Results();},
 	title:{data:resultsText,xDiff:-450,yDiff:-155,width:278,height:75,textXoffset:13,textYoffset:8,targetWidth:900,targetHeight:400, isOption:false},
 	background:[
-		{data:Numbers[1],xDiff:-380,yDiff:-65,width:160,height:230,border:3,textXoffset:63,textWidth:6,textHeight:5,textColor:playerTextColor,borderColor:PlayerColors[1].fadeColor,bgColor:PlayerColors[1].color,
-			label:[{data:null,textYoffset:10,textBorder:2,textColor:optionTextHighlightColor}]
+		{data:Numbers[1],xDiff:-380,yDiff:-65,width:160,height:230,border:3,textXoffset:63,textWidth:6,textHeight:5,textColor:Color.playerText,borderColor:PlayerColor[1].fade,bgColor:PlayerColor[1].color,
+			label:[{data:null,textYoffset:10,textBorder:2,textColor:Color.optionTextHgl}]
 		},
-		{data:Numbers[2],xDiff:-180,yDiff:-65,width:160,height:230,border:3,textXoffset:70,textWidth:6,textHeight:5,textColor:playerTextColor,borderColor:PlayerColors[2].fadeColor,bgColor:PlayerColors[2].color,
-			label:[{data:null,textYoffset:10,textBorder:2,textColor:optionTextHighlightColor}]
+		{data:Numbers[2],xDiff:-180,yDiff:-65,width:160,height:230,border:3,textXoffset:70,textWidth:6,textHeight:5,textColor:Color.playerText,borderColor:PlayerColor[2].fade,bgColor:PlayerColor[2].color,
+			label:[{data:null,textYoffset:10,textBorder:2,textColor:Color.optionTextHgl}]
 		},
-		{data:Numbers[3],xDiff:20,yDiff:-65,width:160,height:230,border:3,textXoffset:70,textWidth:6,textHeight:5,textColor:playerTextColor,borderColor:PlayerColors[3].fadeColor,bgColor:PlayerColors[3].color,
-			label:[{data:null,textYoffset:10,textBorder:2,textColor:optionTextHighlightColor}]
+		{data:Numbers[3],xDiff:20,yDiff:-65,width:160,height:230,border:3,textXoffset:70,textWidth:6,textHeight:5,textColor:Color.playerText,borderColor:PlayerColor[3].fade,bgColor:PlayerColor[3].color,
+			label:[{data:null,textYoffset:10,textBorder:2,textColor:Color.optionTextHgl}]
 		},
-		{data:Numbers[4],xDiff:220,yDiff:-65,width:160,height:230,border:3,textXoffset:70,textWidth:6,textHeight:5,textColor:playerTextColor,borderColor:PlayerColors[4].fadeColor,bgColor:PlayerColors[4].color,
-			label:[{data:null,textYoffset:10,textBorder:2,textColor:optionTextHighlightColor}]
+		{data:Numbers[4],xDiff:220,yDiff:-65,width:160,height:230,border:3,textXoffset:70,textWidth:6,textHeight:5,textColor:Color.playerText,borderColor:PlayerColor[4].fade,bgColor:PlayerColor[4].color,
+			label:[{data:null,textYoffset:10,textBorder:2,textColor:Color.optionTextHgl}]
 		}
 	],
 	button:[
@@ -2962,21 +2939,21 @@ results:{
 playerConfirm:{
 	label:[
 		{data:confirmPlayersText, xDiff:0, yDiff:-130, textWidth:6, textHeight:5},
-		{data:null, xDiff:0, yDiff:-12, pTextWidth:860, pTextAlign:"center", pFontSize:"bold 30", pTextColor:menuTextColor},
-		{data:null, xDiff:0, yDiff:20, pTextAlign:"center", pFontSize:"bold 20", pTextColor:menuTextColor, pText:"(or doubleclick)"}
+		{data:null, xDiff:0, yDiff:-12, pTextWidth:860, pTextAlign:"center", pFontSize:"bold 30", pTextColor:Color.menuText},
+		{data:null, xDiff:0, yDiff:20, pTextAlign:"center", pFontSize:"bold 20", pTextColor:Color.menuText, pText:"(or doubleclick)"}
 	],
 	background:[
-		{data:Numbers[1],xDiff:-380,yDiff:40,width:160,height:80,textXoffset:63,textYoffset:5,textWidth:6,textHeight:5,textColor:playerTextColor,textFadeColor:playerTextColor,textHighlightColor:optionTextHighlightColor,bgColor:PlayerColors[1].color,bgFadeColor:PlayerColors[1].fadeColor,bgHighlightColor:PlayerColors[1].color,
-			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[1].bgColor,bgFadeColor:PlayerColors[1].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
+		{data:Numbers[1],xDiff:-380,yDiff:40,width:160,height:80,textXoffset:63,textYoffset:5,textWidth:6,textHeight:5,textColor:Color.playerText,textFadeColor:Color.playerText,textHglColor:Color.optionTextHgl,bgColor:PlayerColor[1].color,bgFadeColor:PlayerColor[1].fade,bgHglColor:PlayerColor[1].color,
+			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:Color.playerText,bgColor:PlayerColor[1].bg,bgFadeColor:PlayerColor[1].bgFade,bgHglColor:Color.optionTextHgl}]
 		},
-		{data:Numbers[2],xDiff:-180,yDiff:40,width:160,height:80,textXoffset:70,textYoffset:5,textWidth:6,textHeight:5,textColor:playerTextColor,textFadeColor:playerTextColor,textHighlightColor:optionTextHighlightColor,bgColor:PlayerColors[2].color,bgFadeColor:PlayerColors[2].fadeColor,bgHighlightColor:PlayerColors[2].color,
-			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[2].bgColor,bgFadeColor:PlayerColors[2].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
+		{data:Numbers[2],xDiff:-180,yDiff:40,width:160,height:80,textXoffset:70,textYoffset:5,textWidth:6,textHeight:5,textColor:Color.playerText,textFadeColor:Color.playerText,textHglColor:Color.optionTextHgl,bgColor:PlayerColor[2].color,bgFadeColor:PlayerColor[2].fade,bgHglColor:PlayerColor[2].color,
+			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:Color.playerText,bgColor:PlayerColor[2].bg,bgFadeColor:PlayerColor[2].bgFade,bgHglColor:Color.optionTextHgl}]
 		},
-		{data:Numbers[3],xDiff:20,yDiff:40,width:160,height:80,textXoffset:70,textYoffset:5,textWidth:6,textHeight:5,textColor:playerTextColor,textFadeColor:playerTextColor,textHighlightColor:optionTextHighlightColor,bgColor:PlayerColors[3].color,bgFadeColor:PlayerColors[3].fadeColor,bgHighlightColor:PlayerColors[3].color,
-			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[3].bgColor,bgFadeColor:PlayerColors[3].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
+		{data:Numbers[3],xDiff:20,yDiff:40,width:160,height:80,textXoffset:70,textYoffset:5,textWidth:6,textHeight:5,textColor:Color.playerText,textFadeColor:Color.playerText,textHglColor:Color.optionTextHgl,bgColor:PlayerColor[3].color,bgFadeColor:PlayerColor[3].fade,bgHglColor:PlayerColor[3].color,
+			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:Color.playerText,bgColor:PlayerColor[3].bg,bgFadeColor:PlayerColor[3].bgFade,bgHglColor:Color.optionTextHgl}]
 		},
-		{data:Numbers[4],xDiff:220,yDiff:40,width:160,height:80,textXoffset:70,textYoffset:5,textWidth:6,textHeight:5,textColor:playerTextColor,textFadeColor:playerTextColor,textHighlightColor:optionTextHighlightColor,bgColor:PlayerColors[4].color,bgFadeColor:PlayerColors[4].fadeColor,bgHighlightColor:PlayerColors[4].color,
-			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:playerTextColor,bgColor:PlayerColors[4].bgColor,bgFadeColor:PlayerColors[4].bgFadeColor,bgHighlightColor:optionTextHighlightColor}]
+		{data:Numbers[4],xDiff:220,yDiff:40,width:160,height:80,textXoffset:70,textYoffset:5,textWidth:6,textHeight:5,textColor:Color.playerText,textFadeColor:Color.playerText,textHglColor:Color.optionTextHgl,bgColor:PlayerColor[4].color,bgFadeColor:PlayerColor[4].fade,bgHglColor:PlayerColor[4].color,
+			background:[{data:null,xDiff:3,yDiff:40,width:154,height:37,pTextAlign:"center",pFontSize:"bold 20",pTextYoffset:-12,pTextColor:Color.playerText,bgColor:PlayerColor[4].bg,bgFadeColor:PlayerColor[4].bgFade,bgHglColor:Color.optionTextHgl}]
 		}
 	]
 }
@@ -3023,8 +3000,8 @@ function AddDefaultProperties(element, elementType, parent, menu=null){ //elemen
 		}
 		if(element.type==="checkbox" || element.type==="adjustbox"){
 			Object.defineProperty(element,"value",{
-				get: function(){return Game[element.name];},
-				set: function(v){Game[element.name] = v;}
+				get: function(){return element.prop[0][element.prop[1]];},
+				set: function(v){element.prop[0][element.prop[1]] = v;}
 			});
 		}
 	} else
@@ -3061,37 +3038,37 @@ function AddDefaultProperties(element, elementType, parent, menu=null){ //elemen
 	element.orgTargetWidth = element.targetWidth; //not used for anything yet...
 	if(!element.hasOwnProperty("borderColor")){
 		if(element.type === "title")
-			element.borderColor = menuBorderColor;
+			element.borderColor = Color.menuBorder;
 		else if(element.type === "item")
-			element.borderColor = optionBgColor;
+			element.borderColor = Color.optionBg;
 		else
-			element.borderColor = optionBorderColor;
+			element.borderColor = Color.optionBorder;
 	}
-	if(!element.hasOwnProperty("borderHighlightColor")) element.borderHighlightColor = optionBorderHighlightColor; //shorter names?
-	if(!element.hasOwnProperty("borderFadeColor")) element.borderFadeColor = optionFadeColor;
+	if(!element.hasOwnProperty("borderHglColor")) element.borderHglColor = Color.optionBorderHgl; //shorter names?
+	if(!element.hasOwnProperty("borderFadeColor")) element.borderFadeColor = Color.optionFade;
 	if(!element.hasOwnProperty("bgColor")){
 		if(element.type === "title")
-			element.bgColor = menuBgColor;
+			element.bgColor = Color.menuBg;
 		else
-			element.bgColor = optionBgColor;
+			element.bgColor = Color.optionBg;
 	}
-	if(!element.hasOwnProperty("bgHighlightColor")) element.bgHighlightColor = optionBgHighlightColor;
-	if(!element.hasOwnProperty("bgFadeColor")) element.bgFadeColor = optionBgColor;
-	if(!element.hasOwnProperty("fgColor")) element.fgColor = menuBorderColor;
+	if(!element.hasOwnProperty("bgHglColor")) element.bgHglColor = Color.optionBgHgl;
+	if(!element.hasOwnProperty("bgFadeColor")) element.bgFadeColor = Color.optionBg;
+	if(!element.hasOwnProperty("fgColor")) element.fgColor = Color.menuBorder;
 	if(!element.hasOwnProperty("textColor")){
 		if(element.type === "title")
-			element.textColor = menuTitleColor;
+			element.textColor = Color.menuTitle;
 		else if(element.isOption)
-			element.textColor = optionTextColor;
+			element.textColor = Color.optionText;
 		else
-			element.textColor = menuTextColor;
+			element.textColor = Color.menuText;
 	}
-	if(!element.hasOwnProperty("textHighlightColor")) element.textHighlightColor = optionTextHighlightColor;
+	if(!element.hasOwnProperty("textHglColor")) element.textHglColor = Color.optionTextHgl;
 	if(!element.hasOwnProperty("textFadeColor")){
 		if(element.isOption)
-			element.textFadeColor = optionFadeColor;
+			element.textFadeColor = Color.optionFade;
 		else
-			element.textFadeColor = menuTextFadeColor;
+			element.textFadeColor = Color.menuTextFade;
 	}
 	if(!element.hasOwnProperty("guiState")) element.guiState = GUIstate.Enabled;
 	if(!element.hasOwnProperty("selected")) element.selected = false;
@@ -3101,7 +3078,7 @@ function AddDefaultProperties(element, elementType, parent, menu=null){ //elemen
 	if(!element.hasOwnProperty("pTextXoffset")) element.pTextXoffset = 0;
 	if(!element.hasOwnProperty("pTextYoffset")) element.pTextYoffset = 0;
 	if(!element.hasOwnProperty("pTextWidth")) element.pTextWidth = element.width;
-	if(!element.hasOwnProperty("pTextColor")) element.pTextColor = plainTextColor;
+	if(!element.hasOwnProperty("pTextColor")) element.pTextColor = Color.plainText;
 	if(!element.hasOwnProperty("pText")) element.pText = "";
 }
 
@@ -3112,7 +3089,7 @@ function AddStageButton(stageIndex,stageWidth,stageHeight){
 function UpdateInputMethodMenu(){
 	let inputDropdown = GUI.options.dropdown[0];
 	inputDropdown.item = [];
-	inputDropdown.borderColor = PlayerColors[activePlayer].color;
+	inputDropdown.borderColor = PlayerColor[KeyBind.player].color;
 	inputDropdown.targetWidth = inputDropdown.orgWidth;
 	
 	guiRender.font = inputDropdown.pFontSize+"px Arial";
@@ -3120,25 +3097,25 @@ function UpdateInputMethodMenu(){
 		inputDropdown.targetWidth = Math.max(inputDropdown.targetWidth, Math.floor(guiRender.measureText(InputMethods[method].id).width));
 		inputDropdown.item.push({data:null,pText:InputMethods[method].id});
 		AddDefaultProperties(inputDropdown.item[method],"item",inputDropdown,GUI.options);
-		inputDropdown.item[method].bgHighlightColor = PlayerColors[activePlayer].fadeColor;
+		inputDropdown.item[method].bgHglColor = PlayerColor[KeyBind.player].fade;
 	}
 	inputDropdown.item.push({data:null,pText:"No input"});
 	AddDefaultProperties(inputDropdown.item[inputDropdown.item.length-1],"item",inputDropdown,GUI.options);
-	inputDropdown.item[inputDropdown.item.length-1].bgHighlightColor = PlayerColors[activePlayer].fadeColor;
+	inputDropdown.item[inputDropdown.item.length-1].bgHglColor = PlayerColor[KeyBind.player].fade;
 	
-	if(Players[activePlayer].inputMethod===-1) //activePlayer has no inputMethod
+	if(Players[KeyBind.player].inputMethod===-1) //KeyBind.player has no inputMethod
 		inputDropdown.activeItem = inputDropdown.item.length-1;
 	else
-		inputDropdown.activeItem = Players[activePlayer].inputMethod;
+		inputDropdown.activeItem = Players[KeyBind.player].inputMethod;
 	
 	inputDropdown.selectedItem = inputDropdown.activeItem;
 }
 function CloseAllMenus(){
-	activeMenu = null;
-	activeSubmenu = null;
+	Menu.active = null;
+	Menu.subMenu = null;
 }
 function CurrentMenu(){
-	return (activeSubmenu!==null) ? activeSubmenu : activeMenu; //return activeSubmenu ?? activeMenu;
+	return (Menu.subMenu!==null) ? Menu.subMenu : Menu.active; //return Menu.subMenu ?? Menu.active;
 }
 function GetClosestOption(direction,option){
 	let menuGUI = CurrentMenu();
@@ -3213,7 +3190,7 @@ function GetClosestOption(direction,option){
 	return option;
 }
 function PushGuiNavInput(inputType){
-	if(keyBinding || mouseDrag || optionSelected || menuAnimating || loadingScreen)
+	if(KeyBind.inProgress || Mouse.drag || Option.select || Menu.animating || Loading.inProgress)
 		return;
 	
 	if(!guiNavInputs.includes(inputType)) //only one input of each inputType per frame
@@ -3224,33 +3201,33 @@ function NavigateGUI(){
 	for(let i = 0; i < guiNavInputs.length; i++){
 		let input = guiNavInputs[i];
 		if(input===Input.confirm){
-			optionSelected = true;
+			Option.select = true;
 			break;
 		} else if(input===Input.cancel){
-			optionSelected = true;
-			selectedOption = cancel;
+			Option.select = true;
+			Option.selected = Option.cancel;
 			break;
 		}
-		if(activeOption===null){
-			let previousOption = selectedOption;
+		if(Option.active===null){
+			let previousOption = Option.selected;
 			
-			if(activeSubmenu===GUI.options && input===Input.up && previousOption===GUI.options.dropdown[0])
-				selectedOption = GUI.options.button[activePlayer-1]; //put selection to active playerButton
+			if(Menu.subMenu===GUI.options && input===Input.up && previousOption===GUI.options.dropdown[0])
+				Option.selected = GUI.options.button[KeyBind.player-1]; //put selection to active playerButton
 			else
-				selectedOption = GetClosestOption(input,selectedOption);
+				Option.selected = GetClosestOption(input,Option.selected);
 			
-			let stageSelect = (activeSubmenu===GUI.battle && Stages.length>0 && selectedOption.parent === GUI.battle.background[0]);
+			let stageSelect = (Menu.subMenu===GUI.battle && Stages.length>0 && Option.selected.parent === GUI.battle.background[0]);
 			
-			if(previousOption !== selectedOption)
+			if(previousOption !== Option.selected)
 				optionChanged = true;
 			else if(stageSelect && input===Input.down){ //stage selection didn't change (this can be removed completely if maxOverlap value is decreased)
 				if(stageRow === GetLastStageRow()-1){ //second last row
-					selectedOption = GUI.battle.stagebutton[Stages.length-1]; //select last stage
+					Option.selected = GUI.battle.stagebutton[Stages.length-1]; //select last stage
 					optionChanged = true;
 				}
 			}
 			if(optionChanged && stageSelect){
-				let selectedStage = selectedOption.stage+1; //index+1
+				let selectedStage = Option.selected.stage+1; //index+1
 				while(true){
 					if(stageRow*stageColumnCount < selectedStage-stageColumnCount*stageColumnCount)
 						stageRow++;
@@ -3261,54 +3238,53 @@ function NavigateGUI(){
 				}
 			}
 		} else {
-			if(activeOption.hasOwnProperty("item")){ //dropdown
-				let prevSelectedItem = activeOption.selectedItem;
+			if(Option.active.hasOwnProperty("item")){ //dropdown
+				let prevSelectedItem = Option.active.selectedItem;
 				
-				let firstIsActive = (activeOption.activeItem===0);
-				let lastIsActive = (activeOption.activeItem===activeOption.item.length-1);
+				let firstIsActive = (Option.active.activeItem===0);
+				let lastIsActive = (Option.active.activeItem===Option.active.item.length-1);
 				//active item is at the top of the list: (this could be cleaned up (or dropdown items could be changed to regular gui-elements))
 				if(input===Input.up){
-					if(activeOption.selectedItem-1 === activeOption.activeItem)
-						activeOption.selectedItem -= 1+!firstIsActive;
-					else if(activeOption.selectedItem-1 < 0)
-						activeOption.selectedItem = activeOption.activeItem;
-					else if(activeOption.selectedItem !== activeOption.activeItem)
-						activeOption.selectedItem--;
+					if(Option.active.selectedItem-1 === Option.active.activeItem)
+						Option.active.selectedItem -= 1+!firstIsActive;
+					else if(Option.active.selectedItem-1 < 0)
+						Option.active.selectedItem = Option.active.activeItem;
+					else if(Option.active.selectedItem !== Option.active.activeItem)
+						Option.active.selectedItem--;
 				} else if(input===Input.down){
-					if(activeOption.selectedItem+1 === activeOption.activeItem)
-						activeOption.selectedItem += 2*!lastIsActive;
-					else if(activeOption.selectedItem === activeOption.activeItem)
-						activeOption.selectedItem = 1*(firstIsActive && !lastIsActive);
-					else if(activeOption.selectedItem < activeOption.item.length-1)
-						activeOption.selectedItem++;
+					if(Option.active.selectedItem+1 === Option.active.activeItem)
+						Option.active.selectedItem += 2*!lastIsActive;
+					else if(Option.active.selectedItem === Option.active.activeItem)
+						Option.active.selectedItem = 1*(firstIsActive && !lastIsActive);
+					else if(Option.active.selectedItem < Option.active.item.length-1)
+						Option.active.selectedItem++;
 				}
 				
-				if(prevSelectedItem!==activeOption.selectedItem)
+				if(prevSelectedItem!==Option.active.selectedItem)
 					optionChanged = true;
 			} else if(input===Input.left || input===Input.right)
-				SetAdjustBox(CurrentMenu(),activeOption,(input===Input.left) ? -1 : 1);
+				SetAdjustBox(CurrentMenu(),Option.active,(input===Input.left) ? -1 : 1);
 		}
 	}
 	if(optionChanged)
 		PlaySound(Sounds.select);
-	if(optionSelected)
-		PlaySound((selectedOption===cancel || selectedOption.cancel) ? Sounds.cancel : Sounds.confirm);
+	if(Option.select)
+		PlaySound((Option.selected===Option.cancel || Option.selected.cancel) ? Sounds.cancel : Sounds.confirm);
 	guiNavInputs = [];
 }
-let guiX=0,guiY=0;
 function MouseOver(element){
 	if(element.guiState !== GUIstate.Enabled)
 		return false;
 	
-	guiY = scaledHeightHalf+element.yDiff+(element.parent.yDiff || 0); //?? 0
-	guiX = scaledWidthHalf+element.xDiff+(element.parent.xDiff || 0); //?? 0
-	if(mouseY>=guiY && mouseY<guiY+element.height && mouseX>=guiX && mouseX<guiX+element.width)
+	guiY = Screen.scaledHeightHalf+element.yDiff+(element.parent.yDiff || 0); //?? 0
+	guiX = Screen.scaledWidthHalf+element.xDiff+(element.parent.xDiff || 0); //?? 0
+	if(Mouse.y>=guiY && Mouse.y<guiY+element.height && Mouse.x>=guiX && Mouse.x<guiX+element.width)
 		return true;
 	
 	return false;
 }
 function CheckMouse(clicked){
-	if(menuAnimating)
+	if(Menu.animating)
 		return false;
 	
 	let menuGUI = CurrentMenu();
@@ -3316,12 +3292,12 @@ function CheckMouse(clicked){
 	for(let e = 0; e < menuGUI.options.length; e++){
 		let guiElement = menuGUI.options[e];
 		
-		if(guiElement.type === "title" && !mouseDrag && activeOption===null){
-			guiY = scaledHeightHalf+guiElement.yDiff;
-			guiX = scaledWidthHalf+guiElement.xDiff;
-			if(mouseY>=guiY && mouseY<guiY+guiElement.orgHeight)
-			if(mouseX>=guiX && mouseX<guiX+guiElement.orgWidth){
-				selectedOption = guiElement;
+		if(guiElement.type === "title" && !Mouse.drag && Option.active===null){
+			guiY = Screen.scaledHeightHalf+guiElement.yDiff;
+			guiX = Screen.scaledWidthHalf+guiElement.xDiff;
+			if(Mouse.y>=guiY && Mouse.y<guiY+guiElement.orgHeight)
+			if(Mouse.x>=guiX && Mouse.x<guiX+guiElement.orgWidth){
+				Option.selected = guiElement;
 				return true;
 			}
 		}
@@ -3329,8 +3305,8 @@ function CheckMouse(clicked){
 		if(playerConfirm)
 			continue;
 		
-		if(guiElement.type === "dropdown" && !mouseDrag){
-			if(activeOption===guiElement){
+		if(guiElement.type === "dropdown" && !Mouse.drag){
+			if(Option.active===guiElement){
 				for(let item = 0; item < guiElement.item.length; item++){
 					if(MouseOver(guiElement.item[item])){
 						guiElement.selectedItem = item;
@@ -3338,84 +3314,84 @@ function CheckMouse(clicked){
 					}
 				}
 				if(clicked){
-					selectedOption = cancel;
+					Option.selected = Option.cancel;
 					return true;
 				}
-			} else if(activeOption===null){
+			} else if(Option.active===null){
 				if(MouseOver(guiElement)){
-					selectedOption = guiElement;
+					Option.selected = guiElement;
 					return true;
 				}
 			}
 		}
-		if(guiElement.type === "adjustbox" && !mouseDrag && (activeOption===null || activeOption===guiElement)){
+		if(guiElement.type === "adjustbox" && !Mouse.drag && (Option.active===null || Option.active===guiElement)){
 			if(clicked){
 				if(MouseOver(guiElement)){
-					if(mouseX>guiX && mouseX<guiX+guiElement.width*0.25){
+					if(Mouse.x>guiX && Mouse.x<guiX+guiElement.width*0.25){
 						SetAdjustBox(CurrentMenu(),guiElement,-1);
 						return false;
 					}
-					if(mouseX>guiX+guiElement.width*0.75 && mouseX<guiX+guiElement.width){
+					if(Mouse.x>guiX+guiElement.width*0.75 && Mouse.x<guiX+guiElement.width){
 						SetAdjustBox(CurrentMenu(),guiElement,1);
 						return false;
 					}
-				} else if(activeOption===guiElement){
-					selectedOption = cancel;
+				} else if(Option.active===guiElement){
+					Option.selected = Option.cancel;
 					return true;
 				}
-			} else if(activeOption===null){
+			} else if(Option.active===null){
 				if(MouseOver(guiElement)){
-					selectedOption=guiElement;
+					Option.selected = guiElement;
 					return true;
 				}
 			}
 		}
 		
-		if(activeOption!==null)
+		if(Option.active!==null)
 			continue;
 		
-		if(activeSubmenu===GUI.options){
-			deadzoneTargetWidth = deadzoneSliderSmall;
+		if(Menu.subMenu===GUI.options){
+			DzSlider.target = DzSlider.small;
 			
 			if(guiElement.type === "inputfield"){
-				if(mouseDrag){
-					if(selectedOption===guiElement){
-						deadzoneTargetWidth = deadzoneSliderLarge;
-						let KeyBind = KeyBindings[activePlayer][guiElement.inputType];
-						KeyBind.deadzone = Clamp((mouseX-scaledWidthHalf-guiElement.xDiff)/guiElement.width, 0, 1);
+				if(Mouse.drag){
+					if(Option.selected===guiElement){
+						DzSlider.target = DzSlider.large;
+						let keyBind = KeyBindings[KeyBind.player][guiElement.inputType];
+						keyBind.deadzone = Clamp((Mouse.x-Screen.scaledWidthHalf-guiElement.xDiff)/guiElement.width, 0, 1);
 					}
 				} else {
 					if(MouseOver(guiElement)){
-						selectedOption=guiElement;
-						if(mouseX>guiX+((guiElement.width-deadzoneSliderLarge)*KeyBindings[activePlayer][guiElement.inputType].deadzone))
-						if(mouseX<guiX+((guiElement.width-deadzoneSliderLarge)*KeyBindings[activePlayer][guiElement.inputType].deadzone)+deadzoneSliderLarge){
-							deadzoneTargetWidth = deadzoneSliderLarge;
+						Option.selected = guiElement;
+						if(Mouse.x>guiX+((guiElement.width-DzSlider.large)*KeyBindings[KeyBind.player][guiElement.inputType].deadzone))
+						if(Mouse.x<guiX+((guiElement.width-DzSlider.large)*KeyBindings[KeyBind.player][guiElement.inputType].deadzone)+DzSlider.large){
+							DzSlider.target = DzSlider.large;
 							if(clicked)
-								mouseDrag=true;
+								Mouse.drag = true;
 							return false;
 						}
 						return true;
 					}
 				}
 			}
-		} else if(activeSubmenu===GUI.battle){
+		} else if(Menu.subMenu===GUI.battle){
 			if(guiElement.type === "stagebutton"){
 				if(!MouseOver(GUI.battle.background[0]))
 					break;
 				
 				if(MouseOver(guiElement)){
-					selectedOption=guiElement;
+					Option.selected = guiElement;
 					return true;
 				}
 			}
 		}
 		
-		if(mouseDrag)
+		if(Mouse.drag)
 			continue;
 		
 		if(guiElement.type === "button" || guiElement.type === "checkbox"){
 			if(MouseOver(guiElement)){
-				selectedOption=guiElement;
+				Option.selected = guiElement;
 				return true;
 			}
 		}
@@ -3466,11 +3442,11 @@ function SetAdjustNumber(adjustBox, adjustNumber){
 	}
 }
 function MainMenu(){
-	if(optionSelected && activeSubmenu===null){
-		optionSelected=false;
-		if(selectedOption.hasOwnProperty("menu")){
-			lastOption = selectedOption;
-			GUI[selectedOption.menu].run();
+	if(Option.select && Menu.subMenu===null){
+		Option.select=false;
+		if(Option.selected.hasOwnProperty("menu")){
+			Option.last = Option.selected;
+			GUI[Option.selected.menu].run();
 		}
 	}
 	
@@ -3478,14 +3454,14 @@ function MainMenu(){
 	
 	RenderElements(GUI.main);
 	
-	if(activeSubmenu !== null)
-		activeSubmenu.run();
+	if(Menu.subMenu !== null)
+		Menu.subMenu.run();
 }
 function Adventure(){
-	if(activeSubmenu!==GUI.adventure){
+	if(Menu.subMenu!==GUI.adventure){
 		Game.mode=GameMode.adventure;
-		activeSubmenu = GUI.adventure;
-		selectedOption = GUI.adventure.button[0];
+		Menu.subMenu = GUI.adventure;
+		Option.selected = GUI.adventure.button[0];
 		playerConfirm = true;
 		for(let pl = 1; pl < Players.length; pl++)
 			Players[pl].joined = false;
@@ -3495,12 +3471,12 @@ function Adventure(){
 		GUI.adventure.title.xDiff=GUI.adventure.title.orgXdiff;
 		ShowMenu(GUI.adventure.title);
 	}
-	if(optionSelected){
-		optionSelected=false;
-		if(selectedOption===cancel || selectedOption.cancel){
+	if(Option.select){
+		Option.select=false;
+		if(Option.selected===Option.cancel || Option.selected.cancel){
 			playerConfirm = false;
 			HideMenu(GUI.adventure.title);
-		} else if(selectedOption===GUI.adventure.button[0] && !playerConfirm){
+		} else if(Option.selected===GUI.adventure.button[0] && !playerConfirm){
 			CloseAllMenus();
 			InitializeGame(0);
 		}
@@ -3508,7 +3484,7 @@ function Adventure(){
 	
 	RenderMenu(GUI.adventure.title);
 	
-	if(!menuAnimating){
+	if(!Menu.animating){
 		if(playerConfirm)
 			PlayerConfirmWindow();
 		else
@@ -3516,10 +3492,10 @@ function Adventure(){
 	}
 }
 function Battle(){
-	if(activeSubmenu!==GUI.battle){
+	if(Menu.subMenu!==GUI.battle){
 		Game.mode=GameMode.battle;
-		activeSubmenu = GUI.battle;
-		selectedOption = GUI.battle.dropdown[0];
+		Menu.subMenu = GUI.battle;
+		Option.selected = GUI.battle.dropdown[0];
 		playerConfirm = true;
 		for(let pl = 1; pl < Players.length; pl++)
 			Players[pl].joined = false;
@@ -3529,23 +3505,23 @@ function Battle(){
 		GUI.battle.title.xDiff=GUI.battle.title.orgXdiff;
 		ShowMenu(GUI.battle.title);
 	}
-	if(optionSelected){
-		optionSelected=false;
-		if(activeOption===null){
-			if(selectedOption===cancel || selectedOption.cancel){
+	if(Option.select){
+		Option.select=false;
+		if(Option.active===null){
+			if(Option.selected===Option.cancel || Option.selected.cancel){
 				playerConfirm = false;
 				HideMenu(GUI.battle.title);
 			} else if(!playerConfirm){
-				if(selectedOption.type==="dropdown"){
-					activeOption = selectedOption;
-					activeOption.selectedItem = activeOption.activeItem;
-					ShowMenu(activeOption);
-				} else if(selectedOption.type==="adjustbox")
-					activeOption = selectedOption;
-				else if(selectedOption.type==="checkbox")
-					selectedOption.value=!selectedOption.value;
-				else if(selectedOption===GUI.battle.button[0] || selectedOption===GUI.battle.button[1]){
-					let columnDir = (selectedOption===GUI.battle.button[0]) ? -1 : 1;
+				if(Option.selected.type==="dropdown"){
+					Option.active = Option.selected;
+					Option.active.selectedItem = Option.active.activeItem;
+					ShowMenu(Option.active);
+				} else if(Option.selected.type==="adjustbox")
+					Option.active = Option.selected;
+				else if(Option.selected.type==="checkbox")
+					Option.selected.value=!Option.selected.value;
+				else if(Option.selected===GUI.battle.button[0] || Option.selected===GUI.battle.button[1]){
+					let columnDir = (Option.selected===GUI.battle.button[0]) ? -1 : 1;
 					let newColumnCount = Clamp(stageColumnCount+columnDir, 1, Math.max(Stages.length,3));
 					if(stageColumnCount !== newColumnCount){
 						stageColumnCount = newColumnCount;
@@ -3555,22 +3531,22 @@ function Battle(){
 					}
 				} else {
 					CloseAllMenus();
-					InitializeGame(selectedOption.stage);
+					InitializeGame(Option.selected.stage);
 				}
 			}
-		} else if(activeOption===GUI.battle.dropdown[0]){
-			if(selectedOption!==cancel)
-				Game.type = activeOption.selectedItem;
-			HideMenu(activeOption);
+		} else if(Option.active===GUI.battle.dropdown[0]){
+			if(Option.selected!==Option.cancel)
+				Game.type = Option.active.selectedItem;
+			HideMenu(Option.active);
 		} else {
-			selectedOption = activeOption;
-			activeOption = null;
+			Option.selected = Option.active;
+			Option.active = null;
 		}
 	}
 	
 	RenderMenu(GUI.battle.title);
 	
-	if(!menuAnimating || activeOption===GUI.battle.dropdown[0]){
+	if(!Menu.animating || Option.active===GUI.battle.dropdown[0]){
 		if(playerConfirm)
 			PlayerConfirmWindow();
 		else {
@@ -3590,10 +3566,10 @@ function Battle(){
 			
 			let bgElement = GUI.battle.background[0];
 			
-			tempCanvas.width = bgElement.width*Game.guiScale; //Game.guiScale keeps stageIcons sharp in high screen resolutions
-			tempCanvas.height = bgElement.height*Game.guiScale;
+			tempCanvas.width = bgElement.width*Screen.guiScale; //Screen.guiScale keeps stageIcons sharp in high screen resolutions
+			tempCanvas.height = bgElement.height*Screen.guiScale;
 			
-			if(!menuAnimating)
+			if(!Menu.animating)
 				stageRowStep = AnimateValue(stageRowStep,stageRow);
 			
 			let startIndex = Math.floor(stageRowStep)*stageColumnCount;
@@ -3620,91 +3596,91 @@ function Battle(){
 					let iconPosX = bgPosX+(iconBgWidth-iconWidth)/2;
 					let iconPosY = bgPosY+(iconBgHeight-iconHeight)/2;
 					
-					tempRender.fillStyle=(selectedOption===guiElement) ? optionBorderHighlightColor : optionBorderColor;
-					tempRender.fillRect(bgPosX*Game.guiScale,bgPosY*Game.guiScale,iconBgWidth*Game.guiScale,iconBgHeight*Game.guiScale);
+					tempRender.fillStyle=(Option.selected===guiElement) ? Color.optionBorderHgl : Color.optionBorder;
+					tempRender.fillRect(bgPosX*Screen.guiScale,bgPosY*Screen.guiScale,iconBgWidth*Screen.guiScale,iconBgHeight*Screen.guiScale);
 					
 					tempRender.fillStyle="#000000";
-					tempRender.fillRect(iconPosX*Game.guiScale,iconPosY*Game.guiScale,iconWidth*Game.guiScale,iconHeight*Game.guiScale);
+					tempRender.fillRect(iconPosX*Screen.guiScale,iconPosY*Screen.guiScale,iconWidth*Screen.guiScale,iconHeight*Screen.guiScale);
 					
-					tempRender.drawImage(Stages[i],iconPosX*Game.guiScale,iconPosY*Game.guiScale,iconWidth*Game.guiScale,iconHeight*Game.guiScale);
+					tempRender.drawImage(Stages[i],iconPosX*Screen.guiScale,iconPosY*Screen.guiScale,iconWidth*Screen.guiScale,iconHeight*Screen.guiScale);
 				}
 			}
 			
-			guiRender.drawImage(tempCanvas,scaledWidthHalf+bgElement.xDiff,scaledHeightHalf+bgElement.yDiff,bgElement.width,bgElement.height);
+			guiRender.drawImage(tempCanvas,Screen.scaledWidthHalf+bgElement.xDiff,Screen.scaledHeightHalf+bgElement.yDiff,bgElement.width,bgElement.height);
 			
 			if(loadStageCount > 0){
 				guiRender.fillStyle="#FF0000AA";
 				guiRender.font="40px Arial";
 				guiRender.textAlign="center";
 				let loadingText = (loadStageCount===1) ? "Loading image" : ("Loading " + loadStageCount + " images");
-				guiRender.fillText(loadingText,scaledWidthHalf+bgElement.xDiff+bgElement.width/2,scaledHeightHalf+bgElement.yDiff+bgElement.height/2);
+				guiRender.fillText(loadingText,Screen.scaledWidthHalf+bgElement.xDiff+bgElement.width/2,Screen.scaledHeightHalf+bgElement.yDiff+bgElement.height/2);
 			}
 		}
 	}
 }
 function Options(){
-	if(activeSubmenu!==GUI.options){
-		activeSubmenu = GUI.options;
-		selectedOption = GUI.options.adjustbox[0];
+	if(Menu.subMenu!==GUI.options){
+		Menu.subMenu = GUI.options;
+		Option.selected = GUI.options.adjustbox[0];
 		ShowMenu(GUI.options.title);
 	}
-	if(optionSelected){
-		optionSelected=false;
-		if(activeOption===null){
-			if(selectedOption===cancel || selectedOption.cancel){
+	if(Option.select){
+		Option.select=false;
+		if(Option.active===null){
+			if(Option.selected===Option.cancel || Option.selected.cancel){
 				SaveGame();
 				HideMenu(GUI.options.title);
-			} else if(selectedOption.type==="adjustbox")
-				activeOption = selectedOption;
-			else if(selectedOption.hasOwnProperty("player")){ //playerButtons
-				activePlayer = selectedOption.player;
+			} else if(Option.selected.type==="adjustbox")
+				Option.active = Option.selected;
+			else if(Option.selected.hasOwnProperty("player")){ //playerButtons
+				KeyBind.player = Option.selected.player;
 				UpdateInputMethodMenu();
-			} else if(selectedOption.type==="inputfield"){ //hasOwnProperty("inputType") also works
-				if(Players[activePlayer].inputMethod!==-1){
-					activeOption = selectedOption;
-					StartKeyBinding(selectedOption.inputType,true);
+			} else if(Option.selected.type==="inputfield"){ //hasOwnProperty("inputType") also works
+				if(Players[KeyBind.player].inputMethod!==-1){
+					Option.active = Option.selected;
+					StartKeyBind(Option.selected.inputType,true);
 				}
-			} else if(selectedOption.parent.type==="inputfield"){ //inputField add buttons
-				if(Players[activePlayer].inputMethod!==-1){
-					activeOption = selectedOption;
-					StartKeyBinding(selectedOption.parent.inputType,false);
+			} else if(Option.selected.parent.type==="inputfield"){ //inputField add buttons
+				if(Players[KeyBind.player].inputMethod!==-1){
+					Option.active = Option.selected;
+					StartKeyBind(Option.selected.parent.inputType,false);
 				}
-			} else if(selectedOption.type==="dropdown"){
-				activeOption = selectedOption;
-				activeOption.selectedItem = activeOption.activeItem;
-				ShowMenu(activeOption);
-			} else if(selectedOption.type==="checkbox"){
-				selectedOption.value=!selectedOption.value;
+			} else if(Option.selected.type==="dropdown"){
+				Option.active = Option.selected;
+				Option.active.selectedItem = Option.active.activeItem;
+				ShowMenu(Option.active);
+			} else if(Option.selected.type==="checkbox"){
+				Option.selected.value=!Option.selected.value;
 				ScreenSize();
 			}
-		} else if(activeOption===GUI.options.dropdown[0]){
-			let selectedInputMethod = activeOption.selectedItem;
-			if(selectedInputMethod!==activeOption.activeItem && selectedOption!==cancel){ //if 1st condition is removed: always resets current keyBindings when any inputMethod is chosen
+		} else if(Option.active===GUI.options.dropdown[0]){
+			let selectedInputMethod = Option.active.selectedItem;
+			if(selectedInputMethod!==Option.active.activeItem && Option.selected!==Option.cancel){ //if 1st condition is removed: always resets current keyBindings when any inputMethod is chosen
 				if(selectedInputMethod<InputMethods.length){
-					Players[activePlayer].inputInfo = {id:InputMethods[selectedInputMethod].id, index:InputMethods[selectedInputMethod].index};
-					KeyBindings[activePlayer] = GetDefaultBindings((selectedInputMethod===0) ? defaultKeyboard : defaultGamepad);
+					Players[KeyBind.player].inputInfo = {id:InputMethods[selectedInputMethod].id, index:InputMethods[selectedInputMethod].index};
+					KeyBindings[KeyBind.player] = GetDefaultBindings((selectedInputMethod===0) ? defaultKeyboard : defaultGamepad);
 				} else
-					Players[activePlayer].inputInfo = {id:"noinput", index:null};
+					Players[KeyBind.player].inputInfo = {id:"noinput", index:null};
 				
 				UpdateInputMethods();
 				for(let pl = 0; pl < Players.length; pl++)
 					Players[pl].confirmKey = false;
 			}
-			HideMenu(activeOption);
+			HideMenu(Option.active);
 		} else {
-			selectedOption = activeOption;
-			activeOption = null;
+			Option.selected = Option.active;
+			Option.active = null;
 		}
 	}
 	
 	RenderMenu(GUI.options.title);
 	
-	if(!menuAnimating || activeOption===GUI.options.dropdown[0]){
-		if(selectedOption!==cancel && Players[activePlayer].inputMethod===-1 && (selectedOption.type==="inputfield" || selectedOption.parent.type==="inputfield"))
-			selectedOption = GUI.options.adjustbox[0]; //if gamepad is disconnected while an inputfield is selected
+	if(!Menu.animating || Option.active===GUI.options.dropdown[0]){
+		if(Option.selected!==Option.cancel && Players[KeyBind.player].inputMethod===-1 && (Option.selected.type==="inputfield" || Option.selected.parent.type==="inputfield"))
+			Option.selected = GUI.options.adjustbox[0]; //if gamepad is disconnected while an inputfield is selected
 		
 		for(let i = 0; i < GUI.options.label.length; i++)
-			GUI.options.label[i].guiState = (Players[activePlayer].inputMethod!==-1 || i<4) ? GUIstate.Enabled : GUIstate.Disabled;
+			GUI.options.label[i].guiState = (Players[KeyBind.player].inputMethod!==-1 || i<4) ? GUIstate.Enabled : GUIstate.Disabled;
 		
 		SetAdjustNumber(GUI.options.adjustbox[0], Math.floor((6-Game.updateInterval)*20));
 		SetAdjustNumber(GUI.options.adjustbox[1], Math.round(Game.soundVolume*100));
@@ -3713,31 +3689,31 @@ function Options(){
 			GUI.options.checkbox[i].data = (GUI.options.checkbox[i].value) ? Enable : Disable;
 		
 		let guiElement = GUI.options.background[0]; //StickAim test area
-		guiElement.guiState = (Players[activePlayer].inputMethod!==-1) ? GUIstate.Enabled : GUIstate.Disabled;
+		guiElement.guiState = (Players[KeyBind.player].inputMethod!==-1) ? GUIstate.Enabled : GUIstate.Disabled;
 		let childElement = guiElement.background[0];
 		childElement.guiState = guiElement.guiState; //StickAim test area dot
-		childElement.xDiff = guiElement.width/2-(childElement.width/2)+((guiElement.width/2-childElement.width/2-guiElement.border)*Players[activePlayer].aimAxisX);
-		childElement.yDiff = guiElement.height/2-(childElement.height/2)+((guiElement.height/2-childElement.height/2-guiElement.border)*Players[activePlayer].aimAxisY);
+		childElement.xDiff = guiElement.width/2-(childElement.width/2)+((guiElement.width/2-childElement.width/2-guiElement.border)*Players[KeyBind.player].aimAxisX);
+		childElement.yDiff = guiElement.height/2-(childElement.height/2)+((guiElement.height/2-childElement.height/2-guiElement.border)*Players[KeyBind.player].aimAxisY);
 		
-		if(Players[activePlayer].inputMethod!==-1 && !menuAnimating)
-			deadzoneSliderWidth = AnimateValue(deadzoneSliderWidth,deadzoneTargetWidth);
+		if(Players[KeyBind.player].inputMethod!==-1 && !Menu.animating)
+			DzSlider.width = AnimateValue(DzSlider.width,DzSlider.target);
 		
 		for(let i = 0; i < GUI.options.inputfield.length; i++){
 			let guiElement = GUI.options.inputfield[i];
-			guiElement.guiState = (Players[activePlayer].inputMethod!==-1) ? GUIstate.Enabled : GUIstate.Disabled;
+			guiElement.guiState = (Players[KeyBind.player].inputMethod!==-1) ? GUIstate.Enabled : GUIstate.Disabled;
 			guiElement.button[0].guiState = guiElement.guiState; //add-button
 			if(guiElement.guiState === GUIstate.Enabled){
-				let KeyBind = KeyBindings[activePlayer][guiElement.inputType];
-				guiElement.axisValue = KeyBind.value;
+				let keyBind = KeyBindings[KeyBind.player][guiElement.inputType];
+				guiElement.axisValue = keyBind.value;
 				
-				let inputName = KeyBind.name;
-				if(keyBinding && activeBinding===guiElement.inputType)
-					inputName = keyBindingText;
-				else if(KeyBind.deadzone===1)
+				let inputName = keyBind.name;
+				if(KeyBind.inProgress && KeyBind.inputType===guiElement.inputType)
+					inputName = KeyBind.text;
+				else if(keyBind.deadzone===1)
 					inputName = "[disabled]";
 				guiElement.pText = inputName;
 				
-				guiElement.deadzone = KeyBind.deadzone;
+				guiElement.deadzone = keyBind.deadzone;
 			} else
 				guiElement.pText = "";
 		}
@@ -3745,29 +3721,29 @@ function Options(){
 		for(let i = 0; i < GUI.options.button.length; i++){
 			let guiElement = GUI.options.button[i];
 			if(guiElement.hasOwnProperty("player")){
-				let playerIsActive = (activePlayer === guiElement.player);
-				guiElement.textColor = (playerIsActive) ? guiElement.textHighlightColor : PlayerColors[guiElement.player].color;
-				guiElement.bgColor = (playerIsActive) ? PlayerColors[guiElement.player].color : optionBgColor;
-				guiElement.bgHighlightColor = (playerIsActive) ? PlayerColors[guiElement.player].color : PlayerColors[guiElement.player].fadeColor;
+				let playerIsActive = (KeyBind.player === guiElement.player);
+				guiElement.textColor = (playerIsActive) ? guiElement.textHglColor : PlayerColor[guiElement.player].color;
+				guiElement.bgColor = (playerIsActive) ? PlayerColor[guiElement.player].color : Color.optionBg;
+				guiElement.bgHglColor = (playerIsActive) ? PlayerColor[guiElement.player].color : PlayerColor[guiElement.player].fade;
 			}
 		}
 		
 		let inputDropdown = GUI.options.dropdown[0];
-		inputDropdown.bgColor = optionBgColor;
-		inputDropdown.bgHighlightColor = PlayerColors[activePlayer].fadeColor;
-		let gradientX1 = scaledWidthHalf+inputDropdown.xDiff;
+		inputDropdown.bgColor = Color.optionBg;
+		inputDropdown.bgHglColor = PlayerColor[KeyBind.player].fade;
+		let gradientX1 = Screen.scaledWidthHalf+inputDropdown.xDiff;
 		let gradientX2 = gradientX1+inputDropdown.width;
 		for(let method = 0; method < InputMethods.length; method++){
 			let inputPlayers = InputMethods[method].players;
 			if(inputPlayers.length > 0 && inputPlayers[0]!==0){
 				let playerGradient = guiRender.createLinearGradient(gradientX1,0,gradientX2,0);
 				for(let ip = 0; ip < inputPlayers.length; ip++)
-					playerGradient.addColorStop((inputPlayers.length>1) ? ip/(inputPlayers.length-1) : 0, PlayerColors[inputPlayers[ip]].fadeColor);
+					playerGradient.addColorStop((inputPlayers.length>1) ? ip/(inputPlayers.length-1) : 0, PlayerColor[inputPlayers[ip]].fade);
 				inputDropdown.item[method].bgColor = playerGradient;
-				inputDropdown.item[method].bgHighlightColor = playerGradient;
-				if(inputPlayers.includes(activePlayer) && activeOption!==inputDropdown){
+				inputDropdown.item[method].bgHglColor = playerGradient;
+				if(inputPlayers.includes(KeyBind.player) && Option.active!==inputDropdown){
 					inputDropdown.bgColor = playerGradient;
-					inputDropdown.bgHighlightColor = playerGradient;
+					inputDropdown.bgHglColor = playerGradient;
 				}
 			}
 		}
@@ -3779,15 +3755,15 @@ function Pause(){
 	if(!Game.pause){
 		StopAllSounds();
 		Game.pause = true;
-		activeMenu = GUI.pause;
-		selectedOption = GUI.pause.button[0];
+		Menu.active = GUI.pause;
+		Option.selected = GUI.pause.button[0];
 	}
-	if(optionSelected && activeSubmenu===null){
-		optionSelected=false;
-		if(selectedOption.hasOwnProperty("menu")){
-			lastOption = selectedOption;
-			GUI[selectedOption.menu].run();
-		} else if(selectedOption===GUI.pause.button[0] || selectedOption===cancel){
+	if(Option.select && Menu.subMenu===null){
+		Option.select=false;
+		if(Option.selected.hasOwnProperty("menu")){
+			Option.last = Option.selected;
+			GUI[Option.selected.menu].run();
+		} else if(Option.selected===GUI.pause.button[0] || Option.selected===Option.cancel){
 			CloseAllMenus();
 			Game.pause = false;
 		}
@@ -3797,13 +3773,13 @@ function Pause(){
 	
 	RenderElements(GUI.pause);
 	
-	if(activeSubmenu !== null)
-		activeSubmenu.run();
+	if(Menu.subMenu !== null)
+		Menu.subMenu.run();
 }
 function ExitGame(){
-	if(activeSubmenu!==GUI.exitGame){
-		activeSubmenu = GUI.exitGame;
-		selectedOption = GUI.exitGame.button[0];
+	if(Menu.subMenu!==GUI.exitGame){
+		Menu.subMenu = GUI.exitGame;
+		Option.selected = GUI.exitGame.button[0];
 		
 		GUI.exitGame.label[0].guiState = (Game.mode===GameMode.adventure) ? GUIstate.Enabled : GUIstate.Hidden;
 		GUI.exitGame.label[1].guiState = (Game.mode===GameMode.battle) ? GUIstate.Enabled : GUIstate.Hidden;
@@ -3812,20 +3788,20 @@ function ExitGame(){
 		GUI.exitGame.title.xDiff=GUI.exitGame.title.orgXdiff;
 		ShowMenu(GUI.exitGame.title);
 	}
-	if(optionSelected){
-		optionSelected=false;
-		if(selectedOption===cancel || selectedOption.cancel)
+	if(Option.select){
+		Option.select=false;
+		if(Option.selected===Option.cancel || Option.selected.cancel)
 			HideMenu(GUI.exitGame.title);
-		else if(selectedOption===GUI.exitGame.button[1]){
+		else if(Option.selected===GUI.exitGame.button[1]){
 			Game.started = false;
-			activeMenu = GUI.main;
+			Menu.active = GUI.main;
 			if(Game.mode===GameMode.adventure){
-				activeSubmenu = null;
-				selectedOption = GUI.main.button[0];
+				Menu.subMenu = null;
+				Option.selected = GUI.main.button[0];
 			} else {
-				activeSubmenu = GUI.battle;
-				lastOption = GUI.main.button[1];
-				selectedOption = GUI.battle.stagebutton[Game.levelIndex];
+				Menu.subMenu = GUI.battle;
+				Option.last = GUI.main.button[1];
+				Option.selected = GUI.battle.stagebutton[Game.levelIndex];
 				ShowMenu(GUI.battle.title);
 			}
 		}
@@ -3833,17 +3809,17 @@ function ExitGame(){
 	
 	RenderMenu(GUI.exitGame.title);
 	
-	if(!menuAnimating)
+	if(!Menu.animating)
 		RenderElements(GUI.exitGame);
 }
 function Results(){
-	if(activeMenu!==GUI.results){
+	if(Menu.active!==GUI.results){
 		StopAllSounds();
 		PlaySound(Sounds.death);
 		Game.pause = true;
 		Game.started = false;
-		activeMenu = GUI.results;
-		selectedOption = GUI.results.button[0];
+		Menu.active = GUI.results;
+		Option.selected = GUI.results.button[0];
 		
 		let Winners = [];
 		for(let pl = 1; pl < Players.length; pl++){
@@ -3902,18 +3878,18 @@ function Results(){
 		
 		ShowMenu(GUI.results.title);
 	}
-	if(optionSelected){
-		optionSelected=false;
-		if(selectedOption.hasOwnProperty("menu")){
-			activeMenu = GUI.main;
-			if(GUI[selectedOption.menu]===GUI.battle){
-				activeSubmenu = GUI.battle;
-				lastOption = GUI.main.button[1];
-				selectedOption = GUI.battle.stagebutton[Game.levelIndex];
+	if(Option.select){
+		Option.select=false;
+		if(Option.selected.hasOwnProperty("menu")){
+			Menu.active = GUI.main;
+			if(GUI[Option.selected.menu]===GUI.battle){
+				Menu.subMenu = GUI.battle;
+				Option.last = GUI.main.button[1];
+				Option.selected = GUI.battle.stagebutton[Game.levelIndex];
 				ShowMenu(GUI.battle.title);
 			} else //mainMenu
-				selectedOption = GUI.main.button[1];
-		} else if(selectedOption===GUI.results.button[0]){
+				Option.selected = GUI.main.button[1];
+		} else if(Option.selected===GUI.results.button[0]){
 			CloseAllMenus();
 			InitializeGame(Game.levelIndex);
 		}
@@ -3921,7 +3897,7 @@ function Results(){
 	
 	RenderMenu(GUI.results.title);
 	
-	if(!menuAnimating)
+	if(!Menu.animating)
 		RenderElements(GUI.results);
 	
 }
@@ -3933,8 +3909,8 @@ function RenderPlainText(element){
 	guiRender.font=element.pFontSize+"px Arial";
 	guiRender.textAlign=element.pTextAlign;
 	
-	let textXpos = scaledWidthHalf+element.xDiff+element.pTextXoffset+(element.parent.xDiff || 0); //?? 0
-	let textYpos = scaledHeightHalf+element.yDiff+element.pTextYoffset+(element.parent.yDiff || 0); //?? 0
+	let textXpos = Screen.scaledWidthHalf+element.xDiff+element.pTextXoffset+(element.parent.xDiff || 0); //?? 0
+	let textYpos = Screen.scaledHeightHalf+element.yDiff+element.pTextYoffset+(element.parent.yDiff || 0); //?? 0
 	
 	if(guiRender.textAlign === "right" || guiRender.textAlign === "end")
 		textXpos += element.width;
@@ -3959,7 +3935,7 @@ function RenderText(element){
 		guiRender.strokeStyle = element.textBorderColor;
 		
 		if(element.selected)
-			guiRender.fillStyle = element.textHighlightColor;
+			guiRender.fillStyle = element.textHglColor;
 		else if(element.guiState === GUIstate.Enabled)
 			guiRender.fillStyle = element.textColor;
 		else
@@ -3969,8 +3945,8 @@ function RenderText(element){
 			for(let px = 0; px < element.data[py].length; px++){
 				if(element.data[py][px] === 1){
 					guiRender.rect(
-						scaledWidthHalf+element.xDiff+element.textXoffset+px*(element.textWidth+element.textXgap)+(element.parent.xDiff || 0), //?? 0
-						scaledHeightHalf+element.yDiff+element.textYoffset+py*(element.textHeight+element.textYgap)+(element.parent.yDiff || 0), //?? 0
+						Screen.scaledWidthHalf+element.xDiff+element.textXoffset+px*(element.textWidth+element.textXgap)+(element.parent.xDiff || 0), //?? 0
+						Screen.scaledHeightHalf+element.yDiff+element.textYoffset+py*(element.textHeight+element.textYgap)+(element.parent.yDiff || 0), //?? 0
 						element.textWidth,
 						element.textHeight
 					);
@@ -3990,8 +3966,8 @@ function RenderOption(element){
 		return;
 	
 	if(element.selected){
-		guiRender.strokeStyle = element.borderHighlightColor;
-		guiRender.fillStyle = element.bgHighlightColor;
+		guiRender.strokeStyle = element.borderHglColor;
+		guiRender.fillStyle = element.bgHglColor;
 	} else if(element.guiState === GUIstate.Enabled){
 		guiRender.strokeStyle = element.borderColor;
 		guiRender.fillStyle = element.bgColor;
@@ -4000,8 +3976,8 @@ function RenderOption(element){
 		guiRender.fillStyle = element.bgFadeColor;
 	}
 	
-	let rectX = scaledWidthHalf+element.xDiff+element.border/2-element.padding+(element.parent.xDiff || 0); //?? 0
-	let rectY = scaledHeightHalf+element.yDiff+element.border/2-element.padding+(element.parent.yDiff || 0); //?? 0
+	let rectX = Screen.scaledWidthHalf+element.xDiff+element.border/2-element.padding+(element.parent.xDiff || 0); //?? 0
+	let rectY = Screen.scaledHeightHalf+element.yDiff+element.border/2-element.padding+(element.parent.yDiff || 0); //?? 0
 	let rectW = element.width-element.border+element.padding*2;
 	let rectH = element.height-element.border+element.padding*2;
 	
@@ -4030,7 +4006,7 @@ function RenderElements(parentGUI){ //elements are rendered in this order
 	}
 	if(parentGUI.hasOwnProperty("number")){
 		for(let n = 0; n < parentGUI.number.length; n++){
-			parentGUI.number[n].selected = (activeOption===parentGUI);
+			parentGUI.number[n].selected = (Option.active===parentGUI);
 			RenderText(parentGUI.number[n]);
 		}
 	}
@@ -4044,7 +4020,7 @@ function RenderElements(parentGUI){ //elements are rendered in this order
 			if(GUI[element.menu]===CurrentMenu())
 				continue;
 			
-			element.selected = (selectedOption===element);
+			element.selected = (Option.selected===element);
 			
 			RenderOption(element);
 			
@@ -4056,8 +4032,8 @@ function RenderElements(parentGUI){ //elements are rendered in this order
 					let barHeight = (element.height-element.border*2)/element.axisValue.length;
 					guiRender.fillStyle="#CCCC00"; //"#FFFF00CC" and remove RenderPlainText?
 					guiRender.fillRect(
-						scaledWidthHalf+element.xDiff+element.border,
-						scaledHeightHalf+element.yDiff+element.border+barHeight*axis,
+						Screen.scaledWidthHalf+element.xDiff+element.border,
+						Screen.scaledHeightHalf+element.yDiff+element.border+barHeight*axis,
 						(element.width-element.border*2)*element.axisValue[axis],
 						barHeight
 					); //AxisValue-bar
@@ -4067,9 +4043,9 @@ function RenderElements(parentGUI){ //elements are rendered in this order
 				
 				guiRender.fillStyle="#FF0000";
 				guiRender.fillRect(
-					scaledWidthHalf+element.xDiff+((element.width-deadzoneSliderWidth)*element.deadzone),
-					scaledHeightHalf+element.yDiff,
-					deadzoneSliderWidth,
+					Screen.scaledWidthHalf+element.xDiff+((element.width-DzSlider.width)*element.deadzone),
+					Screen.scaledHeightHalf+element.yDiff,
+					DzSlider.width,
 					element.height
 				); //Deadzone-line
 			}
@@ -4078,12 +4054,12 @@ function RenderElements(parentGUI){ //elements are rendered in this order
 	if(parentGUI.hasOwnProperty("dropdown")){
 		for(let d = 0; d < parentGUI.dropdown.length; d++){
 			let element = parentGUI.dropdown[d];
-			element.selected = (selectedOption===element && activeOption!==element);
-			element.pText = (activeOption!==element) ? element.item[element.activeItem].pText : "";
+			element.selected = (Option.selected===element && Option.active!==element);
+			element.pText = (Option.active!==element) ? element.item[element.activeItem].pText : "";
 			element.targetHeight = element.item.length*element.orgHeight;
 			RenderOption(element);
 			
-			if(activeOption===element && !menuAnimating){
+			if(Option.active===element && !Menu.animating){
 				element.width = element.targetWidth;
 				element.height = element.targetHeight;
 				let itemHeight = (element.height-element.border*2)/element.item.length;
@@ -4120,8 +4096,8 @@ function RenderMenu(element){
 	guiRender.fillStyle = element.bgColor;
 	
 	guiRender.rect(
-		scaledWidthHalf+element.xDiff+element.border/2,
-		scaledHeightHalf+element.yDiff+element.border/2,
+		Screen.scaledWidthHalf+element.xDiff+element.border/2,
+		Screen.scaledHeightHalf+element.yDiff+element.border/2,
 		element.width-element.border,
 		element.height-element.border
 	);
@@ -4131,12 +4107,12 @@ function RenderMenu(element){
 		guiRender.stroke();
 	
 	guiRender.beginPath();
-	let cancelKey = (selectedOption===cancel && activeOption===null); //title is also highlighted when cancel-key is pressed
-	guiRender.strokeStyle = (cancelKey || selectedOption===element) ? element.borderHighlightColor : element.borderColor;
+	let cancelKey = (Option.selected===Option.cancel && Option.active===null); //title is also highlighted when cancel-key is pressed
+	guiRender.strokeStyle = (cancelKey || Option.selected===element) ? element.borderHglColor : element.borderColor;
 	guiRender.fillStyle = element.fgColor;
 	guiRender.rect(
-		scaledWidthHalf+element.xDiff+element.border/2,
-		scaledHeightHalf+element.yDiff+element.border/2,
+		Screen.scaledWidthHalf+element.xDiff+element.border/2,
+		Screen.scaledHeightHalf+element.yDiff+element.border/2,
 		element.orgWidth-element.border,
 		element.orgHeight-element.border
 	); //titleBg
@@ -4176,7 +4152,7 @@ function AnimateElement(element,animProperties){
 		let prop = animProperties[ap][0];
 		let target = animProperties[ap][1];
 		
-		element[prop] = AnimateValue(element[prop],element[target],menuAnimThreshold,animSteps);
+		element[prop] = AnimateValue(element[prop],element[target],Menu.animThreshold,animSteps);
 		
 		if(element[prop]!==element[target]){
 			animationDone=false;
@@ -4189,36 +4165,36 @@ function AnimateElement(element,animProperties){
 	return animationDone;
 }
 function AnimateMenu(){
-	let animProperties = (animMenu.show) ?
+	let animProperties = (Menu.animMenu.show) ?
 	[["xDiff","targetXdiff"],["yDiff","targetYdiff"],["width","targetWidth"],["height","targetHeight"]] :
 	[["height","orgHeight"],["width","orgWidth"],["yDiff","orgYdiff"],["xDiff","orgXdiff"]];
 	
-	menuAnimating = !AnimateElement(animMenu.menu,animProperties);
-	if(!menuAnimating){
-		if(!animMenu.show){
-			if(activeOption===null){ //submenu active
-				selectedOption = lastOption;
-				activeSubmenu = null;
+	Menu.animating = !AnimateElement(Menu.animMenu.menu,animProperties);
+	if(!Menu.animating){
+		if(!Menu.animMenu.show){
+			if(Option.active===null){ //submenu active
+				Option.selected = Option.last;
+				Menu.subMenu = null;
 			} else //option active
-				selectedOption = activeOption;
+				Option.selected = Option.active;
 			
-			activeOption = null;
+			Option.active = null;
 		}
-		animMenu = null;
+		Menu.animMenu = null;
 	}
 }
 function ShowMenu(element){
-	if(!menuAnimating){
+	if(!Menu.animating){
 		element.width = element.orgWidth;
 		element.height = element.orgHeight;
-		menuAnimating = true;
-		animMenu = {menu:element,show:true};
+		Menu.animating = true;
+		Menu.animMenu = {menu:element,show:true};
 	}
 }
 function HideMenu(element){
-	if(!menuAnimating){
-		menuAnimating = true;
-		animMenu = {menu:element,show:false};
+	if(!Menu.animating){
+		Menu.animating = true;
+		Menu.animMenu = {menu:element,show:false};
 	}
 }
 function PlayerConfirmWindow(){
@@ -4253,47 +4229,70 @@ function ConfirmPlayers(){
 	
 	guiNavInputs = [];
 	playerConfirm = false;
-	selectedOption = (activeSubmenu===GUI.adventure) ? GUI.adventure.button[0] : GUI.battle.dropdown[0];
+	Option.selected = (Menu.subMenu===GUI.adventure) ? GUI.adventure.button[0] : GUI.battle.dropdown[0];
 	
-	let menuElement = (activeSubmenu===GUI.adventure) ? GUI.adventure.title : GUI.battle.title;
+	let menuElement = (Menu.subMenu===GUI.adventure) ? GUI.adventure.title : GUI.battle.title;
 	menuElement.targetHeight = menuElement.orgTargetHeight;
-	menuAnimating = true;
-	animMenu = {menu:menuElement,show:true};
+	Menu.animating = true;
+	Menu.animMenu = {menu:menuElement,show:true};
 	
 	PlaySound(Sounds.confirm);
 }
-let timeoutTimer = 0;
-function KeyBindingTimer(){
-	if(activeBinding < Input.aimXneg)
-		keyBindingText = "Waiting input..."+timeoutTimer;
+function KeyBindTimer(){
+	if(KeyBind.inputType < Input.aimXneg)
+		KeyBind.text = "Waiting input..."+KeyBind.time;
 	else
-		keyBindingText = "Waiting..."+timeoutTimer;
+		KeyBind.text = "Waiting..."+KeyBind.time;
 	
-	timeoutTimer--;
-	if(timeoutTimer<0)
-		StopKeyBinding();
+	KeyBind.time--;
+	if(KeyBind.time<0)
+		StopKeyBind();
 }
-let timeoutInterval;
-function StartKeyBinding(binding,reset){
-	keyBinding = true;
-	activeBinding = binding;
-	resetBinding = reset;
+function StartKeyBind(inputType,reset){
+	KeyBind.inProgress = true;
+	KeyBind.inputType = inputType;
+	KeyBind.reset = reset;
 	
 	gamepadTemp = {axisValues:[],buttonValues:[]};
-	oldMouseX = mouseX;
-	oldMouseY = mouseY;
+	Mouse.startX = Mouse.x;
+	Mouse.startY = Mouse.y;
 	
-	timeoutTimer = keyBindingTimeout;
-	KeyBindingTimer();
-	timeoutInterval = setInterval(KeyBindingTimer, 1000);
+	KeyBind.time = KeyBind.timeOut;
+	KeyBindTimer();
+	KeyBind.timer = setInterval(KeyBindTimer, 1000);
 }
-function StopKeyBinding(){
-	keyBinding = false;
+function StopKeyBind(){
+	KeyBind.inProgress = false;
 	
 	gamepadTemp = null;
-	activeOption = null;
+	Option.active = null;
 	
-	clearInterval(timeoutInterval);
+	clearInterval(KeyBind.timer);
+}
+function SetKeyBind(name, input){
+	let keyBind = KeyBindings[KeyBind.player][KeyBind.inputType];
+	if(KeyBind.reset){
+		keyBind.name = [];
+		keyBind.input = [];
+		keyBind.value = [];
+	}
+	if(!keyBind.input.includes(input)){
+		keyBind.name.push(name);
+		keyBind.input.push(input);
+		keyBind.value.push(0);
+	}
+	if(Players[KeyBind.player].inputMethod>0){ //not keyboard&mouse
+		for(let key = 0; key < KeyBindings[KeyBind.player].length; key++)
+			KeyBindings[KeyBind.player][key].blocked = new Array(KeyBindings[KeyBind.player][key].input.length).fill(true); //prevents immediate input after keybind
+	}
+}
+function ResetKeyValues(){ //for save loading
+	for(let pl = 0; pl < Players.length; pl++){
+		for(let key = 0; key < KeyBindings[pl].length; key++){
+			KeyBindings[pl][key].value = new Array(KeyBindings[pl][key].input.length).fill(0);
+			KeyBindings[pl][key].blocked = new Array(KeyBindings[pl][key].input.length).fill(false);
+		}
+	}
 }
 function Clamp(value,min,max){
 	return Math.min(Math.max(value, min), max);
@@ -4305,12 +4304,12 @@ function DebugInfo(){
 	let xPos=4, yPos=20, yStep=20;
 	guiRender.textAlign="left";
 	
-	if(Game.started && activeMenu===null){
+	if(Game.started && Menu.active===null){
 		guiRender.fillText(
 			"Level: X:"+levelPosX.toFixed(1)+
 			"  Y:"+levelPosY.toFixed(1)+
-			"  Width:"+terrain.canvas.width+
-			"  Height:"+terrain.canvas.height+
+			"  Width:"+Terrain.canvas.width+
+			"  Height:"+Terrain.canvas.height+
 			"  [I/K|J/L]AreaScale: "+areaScale.toFixed(4)+
 			((Game.fixedCamera) ? "(fixed)" : "("+1*Game.aimArea.toFixed(2)+"|"+1*Game.aimMargin.toFixed(4)+")"),
 			xPos,yPos);
@@ -4332,17 +4331,17 @@ function DebugInfo(){
 	}
 	for(let p = 0; p < Players.length; p++){
 		let playerInputs = KeyBindings[p].map(i => "["+i.value.map(v => +v.toFixed(3))+"]");
-		guiRender.fillText("P"+p+") "+playerInputs,xPos,scaledHeight+20*(p-5));
+		guiRender.fillText("P"+p+") "+playerInputs,xPos,Screen.scaledHeight+20*(p-5));
 	}
 	
-	xPos = scaledWidth-4; yPos = 20;
+	xPos = Screen.scaledWidth-4; yPos = 20;
 	guiRender.textAlign="right";
-	guiRender.fillText("[N/M]pixelScale: "+Game.pixelScale+"%("+pixelRatio+") [X]guiScale: "+Game.guiScale.toFixed(4)+" [Z]smooth: "+Game.imageSmooth+" [C]noClear: "+Game.noClear+" [V]vsync: "+Game.vsync,xPos,yPos+=yStep);
+	guiRender.fillText("[N/M]pixelScale: "+Screen.pixelScale+"%("+Screen.pixelRatio+") [X]guiScale: "+Screen.guiScale.toFixed(4)+" [Z]smooth: "+Screen.smoothing+" [C]noClear: "+Screen.noClear+" [V]vsync: "+Screen.vsync,xPos,yPos+=yStep);
 	guiRender.fillText("[Home/End]UpdateInterval: "+Game.updateInterval+"ms",xPos,yPos+=yStep);
 	guiRender.fillText("[PgUp/PgDn]SpeedMultiplier: "+Game.speedMultiplier+"x",xPos,yPos+=yStep);
 	guiRender.fillText("Mode: "+Object.keys(GameMode)[Game.mode]+" Type: "+Object.keys(GameType)[Game.type],xPos,yPos+=yStep);
 	
-	yPos = scaledHeight-270;
+	yPos = Screen.scaledHeight-270;
 	guiRender.fillText("[`]fixedCamera: "+Game.fixedCamera,xPos,yPos+=yStep);
 	guiRender.fillText("[1]noClip: "+Game.noClip,xPos,yPos+=yStep);
 	guiRender.fillText("[2]noBounds: "+Game.noBounds,xPos,yPos+=yStep);
@@ -4358,21 +4357,21 @@ function DebugInfo(){
 	guiRender.fillText("[G/H]stage: "+Game.levelIndex+"  [,]frameHold  [.]frameStep",xPos,yPos+=yStep);
 	
 	PerfInfo.Update(TimeNow());
-	guiRender.fillText(1*screenWidth.toFixed(4)+"x"+1*screenHeight.toFixed(4)+" | "+PerfInfo.frameInfo+" | "+PerfInfo.fpsInfo,scaledWidth-5,20);
+	guiRender.fillText(1*Screen.width.toFixed(4)+"x"+1*Screen.height.toFixed(4)+" | "+PerfInfo.frameInfo+" | "+PerfInfo.fpsInfo,Screen.scaledWidth-5,20);
 }
 function LogoDraw(){
 	let mouseIsDrawing = false;
 	let GLogo = GUI.logo;
-	if(mouseDraw!==-1){
+	if(Mouse.draw!==-1){
 		GLogo.width = (GLogo.textWidth+GLogo.textXgap)*GLogo.data[0].length+GLogo.textXoffset;
 		GLogo.height = (GLogo.textHeight+GLogo.textYgap)*GLogo.data.length+GLogo.textYoffset;
 		
 		if(MouseOver(GLogo)){
-			let Ydis = mouseY-(scaledHeightHalf+GLogo.yDiff);
-			let Xdis = mouseX-(scaledWidthHalf+GLogo.xDiff);
+			let Ydis = Mouse.y-(Screen.scaledHeightHalf+GLogo.yDiff);
+			let Xdis = Mouse.x-(Screen.scaledWidthHalf+GLogo.xDiff);
 			let dataY = Math.floor(Ydis/GLogo.height*GLogo.data.length);
 			let dataX = Math.floor(Xdis/GLogo.width*GLogo.data[0].length);
-			let newData = (mouseDraw===0) ? 1 : 0;
+			let newData = (Mouse.draw===0) ? 1 : 0;
 			
 			if(GLogo.data[dataY][dataX] !== newData || !GLogo.drawStarted){
 				GLogo.data[dataY][dataX] = newData;
@@ -4395,9 +4394,9 @@ function LogoDraw(){
 		}
 		GLogo.drawStarted = true;
 		if(GLogo.secret && mouseIsDrawing)
-			mouseDraw = -1;
+			Mouse.draw = -1;
 	}
-	let newBorder = (mouseDraw!==-1) ? 1 : 0;
+	let newBorder = (Mouse.draw!==-1) ? 1 : 0;
 	if(GLogo.border !== newBorder){
 		GLogo.border = newBorder;
 		if(newBorder===0)
@@ -4423,8 +4422,8 @@ function LogoLoad(){
 	}
 }
 function SaveGame(){ //add exeption?: Can not save
-	localStorage.setItem('vsync',Game.vsync);
-	localStorage.setItem('guiScaleOn',Game.guiScaleOn);
+	localStorage.setItem('vsync',Screen.vsync);
+	localStorage.setItem('guiScaleOn',Screen.guiScaleOn);
 	localStorage.setItem('updateInterval',Game.updateInterval);
 	localStorage.setItem('soundVolume',Game.soundVolume);
 	localStorage.setItem('KeyBindings',JSON.stringify(KeyBindings));
@@ -4445,10 +4444,10 @@ function LoadGame(){
 	let loadedPlayerInputInfo = JSON.parse(localStorage.getItem('PlayerInputInfo'));
 	
 	if(loadedVsync!==null)
-		Game.vsync = (loadedVsync==="true");
+		Screen.vsync = (loadedVsync==="true");
 	
 	if(loadedGuiScaleOn!==null)
-		Game.guiScaleOn = (loadedGuiScaleOn==="true");
+		Screen.guiScaleOn = (loadedGuiScaleOn==="true");
 	
 	if(loadedUpdateInterval!==null){
 		loadedUpdateInterval = Number(loadedUpdateInterval);
@@ -4479,11 +4478,8 @@ function LoadGame(){
 	
 	LogoLoad();
 }
-let initLevels = false;
-let previousWidth = 0;
-let previousHeight = 0;
 function InitializeLevels(){
-	if(skipAdventure){
+	if(Loading.skipAdventure){
 		for(let l = 0; l < Levels.length; l++)
 			Levels[l].src = ""; //cancel load
 		
@@ -4502,11 +4498,11 @@ function InitializeLevels(){
 	Levels[i].canvas.height = Levels[i].naturalHeight;
 	
 	if(i > 0){
-		previousWidth += Levels[i-1].canvas.width;
-		previousHeight += Math.min(Levels[i-1].canvas.height-Levels[i].canvas.height,0); //top of next level is always at the same height or higher than the previous one
+		levelPosX += Levels[i-1].canvas.width;
+		levelPosY += Math.min(Levels[i-1].canvas.height-Levels[i].canvas.height,0); //top of next level is always at the same height or higher than the previous one
 	}
-	Levels[i].xOffset = previousWidth;
-	Levels[i].yOffset = previousHeight;
+	Levels[i].xOffset = levelPosX;
+	Levels[i].yOffset = levelPosY;
 	
 	Levels[i].render = Levels[i].canvas.getContext('2d');
 	Levels[i].render.drawImage(Levels[i], 0, 0);
@@ -4515,7 +4511,6 @@ function InitializeLevels(){
 	
 	initLevelCount--;
 }
-let initStages = false;
 tempCanvas.width = GUI.battle.background[0].width;
 tempCanvas.height = GUI.battle.background[0].height;
 function InitializeStages(){
@@ -4529,34 +4524,33 @@ function InitializeStages(){
 	
 	initStageCount--;
 }
-let loadingBarProgress = 0, loadingBarTarget = 0;
 function LoadingScreen(){
 	let totalLoadCount = Levels.length*2+Stages.length*2+Object.keys(Sounds).length+Crosshair.length;
-	loadingBarTarget = (totalLoadCount-loadLevelCount-loadStageCount-loadSoundCount-loadCrossCount-initLevelCount-initStageCount)/totalLoadCount;
+	Loading.progress = (totalLoadCount-loadLevelCount-loadStageCount-loadSoundCount-loadCrossCount-initLevelCount-initStageCount)/totalLoadCount;
 	
-	if(Stages.length>0 && !initStages && loadStageCount===0){
-		initStages = true;
+	if(Stages.length>0 && !Loading.initStages && loadStageCount===0){
+		Loading.initStages = true;
 		InitializeStages();
-	} if(Levels.length>0 && !initLevels && (loadLevelCount===0 || skipAdventure)){
-		initLevels = true;
+	} if(Levels.length>0 && !Loading.initLevels && (loadLevelCount===0 || Loading.skipAdventure)){
+		Loading.initLevels = true;
 		InitializeLevels();
 	}
 	
-	if(loadingBarProgress < 1)
-		loadingBarProgress = AnimateValue(loadingBarProgress,loadingBarTarget,0.0001);
-	else if(!loadingDone){
+	if(Loading.barProgress < 1)
+		Loading.barProgress = AnimateValue(Loading.barProgress,Loading.progress,0.0001);
+	else if(!Loading.done){
 		if(Levels.length===0){
 			GUI.main.button[0].guiState = GUIstate.Disabled;
-			selectedOption = GUI.main.button[1];
+			Option.selected = GUI.main.button[1];
 		} else
-			selectedOption = GUI.main.button[0];
+			Option.selected = GUI.main.button[0];
 		
-		loadingDone = true;
-		activeMenu = GUI.main;
+		Loading.done = true;
+		Menu.active = GUI.main;
 	}
 	
-	let barX = scaledWidthHalf-150;
-	let barY = scaledHeightHalf-20;
+	let barX = Screen.scaledWidthHalf-150;
+	let barY = Screen.scaledHeightHalf-20;
 	let barWidth = 300;
 	let barHeight = 40;
 	let barBorder = 2;
@@ -4565,16 +4559,16 @@ function LoadingScreen(){
 	let barInnerWidth = (barWidth-barBorder*2);
 	let barInnerHeight = (barHeight-barBorder*2);
 	
-	guiRender.fillStyle = menuBorderColor;
+	guiRender.fillStyle = Color.menuBorder;
 	guiRender.fillRect(barX, barY, barWidth, barHeight);
 	
 	guiRender.fillStyle = "#000000";
-	guiRender.fillRect(barInnerX+barInnerWidth*loadingBarProgress, barInnerY, barInnerWidth*(1-loadingBarProgress), barInnerHeight);
+	guiRender.fillRect(barInnerX+barInnerWidth*Loading.barProgress, barInnerY, barInnerWidth*(1-Loading.barProgress), barInnerHeight);
 	
 	guiRender.fillStyle = "#FFFFFFCC";
 	guiRender.font = "20px Arial";
 	guiRender.textAlign = "left";
-	guiRender.fillText("Version "+version,3,scaledHeight-3);
+	guiRender.fillText("Version "+version,3,Screen.scaledHeight-3);
 	
 	let xPos=3, yPos=20, yStep=28;
 	guiRender.fillText("- Drop an image file into the game to set it as the background",xPos,yPos);
@@ -4582,23 +4576,31 @@ function LoadingScreen(){
 	guiRender.fillText("- [ScrollLock] to enable DebugMode",xPos,yPos+=yStep);
 	guiRender.fillText("- [F] or [F4] to enable fullscreen",xPos,yPos+=yStep);
 	
-	if(loadingDone){
+	if(Loading.done){
 		guiRender.fillStyle = "#000000";
 		guiRender.font = "30px Arial";
 		guiRender.textAlign = "center";
-		guiRender.fillText("Click to start",scaledWidthHalf,scaledHeightHalf+10);
-	} else if(!skipAdventure){
+		guiRender.fillText("Click to start",Screen.scaledWidthHalf,Screen.scaledHeightHalf+10);
+	} else if(!Loading.skipAdventure){
 		guiRender.textAlign = "center";
-		guiRender.fillText("(Click to skip Adventure load)",scaledWidthHalf,scaledHeightHalf+50);
+		guiRender.fillText("(Click to skip Adventure load)",Screen.scaledWidthHalf,Screen.scaledHeightHalf+50);
+	}
+}
+function CloseLoadingScreen(){
+	if(Loading.inProgress){
+		if(Loading.done)
+			Loading.inProgress = false;
+		else
+			Loading.skipAdventure = true;
 	}
 }
 function GameLoop(){ //main loop
-	if(Game.vsync)
+	if(Screen.vsync)
 		window.requestAnimationFrame(GameLoop);
 	else
 		setTimeout(GameLoop, 0);
 	
-	gameCanvas.style.cursor = (Game.started && activeMenu===null) ? 'none' : 'auto';
+	gameCanvas.style.cursor = (Game.started && Menu.active===null) ? 'none' : 'auto';
 	
 	CheckGamepads(); //polling gamepad inputs
 	
@@ -4608,17 +4610,17 @@ function GameLoop(){ //main loop
 		Game.lastTime = currentTime;
 		Game.frameStep = false;
 		
-		if(!Game.noClear)
-			gameRender.clearRect(0, 0, screenWidth, screenHeight);
+		if(!Screen.noClear)
+			gameRender.clearRect(0, 0, Screen.width, Screen.height);
 		
-		guiRender.clearRect(0, 0, scaledWidth, scaledHeight);
+		guiRender.clearRect(0, 0, Screen.scaledWidth, Screen.scaledHeight);
 		
-		if(loadingScreen)
+		if(Loading.inProgress)
 			LoadingScreen();
-		else if(activeMenu !== null){
+		else if(Menu.active !== null){
 			NavigateGUI();
-			activeMenu.run();
-			if(menuAnimating)
+			Menu.active.run();
+			if(Menu.animating)
 				AnimateMenu();
 		} else if(Game.started && !Game.pause)
 			GameLogic();
@@ -4629,6 +4631,7 @@ function GameLoop(){ //main loop
 		gameRender.drawImage(guiCanvas, 0, 0);
 	}
 }
+UpdateMultiplier(Game.updateInterval);
 LoadGame();
 ScreenSize();
 GameLoop();
