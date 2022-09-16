@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2022)
-const version = "0x4C6";
+const version = "0x4C7";
 
 function TimeNow(){
 	//return Date.now();
@@ -2765,21 +2765,21 @@ battle:{
 		}
 	],
 	adjustbox:[
-		{data:Adjust, prop:[Game,"winScore"], xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
+		{data:Adjust, prop:[Game,"winScore"], min:1, max:100, xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
 			number:[
 				{data:Numbers[5], xDiff:51, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:31, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:11, textYoffset:4, textWidth:5, textHeight:4}
 			]
 		},
-		{data:Adjust, prop:[Game,"lifeCount"], xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
+		{data:Adjust, prop:[Game,"lifeCount"], min:1, max:100, xDiff:-251, yDiff:-25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
 			number:[
 				{data:Numbers[3], xDiff:51, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:31, textYoffset:4, textWidth:5, textHeight:4},
 				{data:Numbers[0], xDiff:11, textYoffset:4, textWidth:5, textHeight:4}
 			]
 		},
-		{data:Adjust, prop:[Game,"shotSpeed"], xDiff:-251, yDiff:25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
+		{data:Adjust, prop:[Game,"shotSpeed"], min:1, max:5, xDiff:-251, yDiff:25, width:91, height:32, textXoffset:4, textYoffset:4, textWidth:5, textHeight:4,
 			number:[
 				{data:Numbers[5], xDiff:37, textYoffset:4, textWidth:5, textHeight:4}
 			]
@@ -2828,14 +2828,14 @@ options:{
 		{data:positiveAimYText, xDiff:-270, yDiff:251, textWidth:4, textHeight:3}
 	],
 	adjustbox:[
-		{data:Adjust, prop:[Game,"updateInterval"], xDiff:-103, yDiff:-62, width:161, height:57, textXoffset:4, textYoffset:4,
+		{data:Adjust, get value(){return Game.updateInterval;}, set value(v){Game.updateInterval=v;UpdateMultiplier(Game.updateInterval);}, mod:-1, min:1, max:5, xDiff:-103, yDiff:-62, width:161, height:57, textXoffset:4, textYoffset:4,
 			number:[
 				{data:Numbers[0], xDiff:90, textYoffset:4},
 				{data:Numbers[0], xDiff:54, textYoffset:4},
 				{data:Numbers[1], xDiff:17, textYoffset:4}
 			]
 		}, //collisionQuality
-		{data:Adjust, prop:[Game,"soundVolume"], xDiff:-103, yDiff:0, width:161, height:57, textXoffset:4, textYoffset:4,
+		{data:Adjust, prop:[Game,"soundVolume"], mod:0.01, min:0, max:1, xDiff:-103, yDiff:0, width:161, height:57, textXoffset:4, textYoffset:4,
 			number:[
 				{data:Numbers[0], xDiff:90, textYoffset:4},
 				{data:Numbers[0], xDiff:54, textYoffset:4},
@@ -2999,10 +2999,17 @@ function AddDefaultProperties(element, elementType, parent, menu=null){ //elemen
 			menu.options.push(element);
 		}
 		if(element.type==="checkbox" || element.type==="adjustbox"){
-			Object.defineProperty(element,"value",{
-				get: function(){return element.prop[0][element.prop[1]];},
-				set: function(v){element.prop[0][element.prop[1]] = v;}
-			});
+			if(!element.hasOwnProperty("value")){
+				Object.defineProperty(element,"value",{
+					get: function(){return element.prop[0][element.prop[1]];},
+					set: function(v){element.prop[0][element.prop[1]] = v;}
+				});
+			}
+			if(element.type==="adjustbox"){
+				if(!element.hasOwnProperty("mod")) element.mod = 1;
+				if(!element.hasOwnProperty("min")) element.min = 0;
+				if(!element.hasOwnProperty("max")) element.max = 100;
+			}
 		}
 	} else
 		element.isOption = false;
@@ -3400,22 +3407,7 @@ function CheckMouse(clicked){
 }
 function SetAdjustBox(menu,option,change){
 	let oldValue = option.value;
-	if(menu===GUI.battle){
-		if(option===GUI.battle.adjustbox[0]){
-			Game.winScore = Clamp(Game.winScore+change, 1, 100);
-		} else if(option===GUI.battle.adjustbox[1]){
-			Game.lifeCount = Clamp(Game.lifeCount+change, 1, 100);
-		} else if(option===GUI.battle.adjustbox[2]){
-			Game.shotSpeed = Clamp(Game.shotSpeed+change, 1, 5);
-		}
-	} else if(menu===GUI.options){
-		if(option===GUI.options.adjustbox[0]){
-			Game.updateInterval = Clamp(Game.updateInterval-change, 1, 5);
-			UpdateMultiplier(Game.updateInterval);
-		} else if(option===GUI.options.adjustbox[1]){
-			Game.soundVolume = Clamp(Game.soundVolume+change*0.01, 0, 1);
-		}
-	}
+	option.value = Clamp(option.value+change*option.mod, option.min, option.max);
 	if(oldValue!==option.value)
 		PlaySound(Sounds.select);
 }
