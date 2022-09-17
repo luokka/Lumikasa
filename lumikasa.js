@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2022)
-const version = "0x4C7";
+const version = "0x4C8";
 
 function TimeNow(){
 	//return Date.now();
@@ -630,6 +630,8 @@ function DirectionalKey(player, inputType, state, value){
 	if(!player.pauseKey && state){
 		if(Game.started && !Game.pause)
 			Pause();
+		//else if(Menu.active===GUI.pause)
+			//PushGuiNavInput(Input.cancel);
 		else if(playerConfirm){
 			if(player.number===firstJoined && player.joined)
 				ConfirmPlayers();
@@ -3748,6 +3750,7 @@ function Pause(){
 		StopAllSounds();
 		Game.pause = true;
 		Menu.active = GUI.pause;
+		Menu.animating = true; //prevent GuiNavInput on the same frame
 		Option.selected = GUI.pause.button[0];
 	}
 	if(Option.select && Menu.subMenu===null){
@@ -4157,6 +4160,10 @@ function AnimateElement(element,animProperties){
 	return animationDone;
 }
 function AnimateMenu(){
+	if(Menu.animMenu===null){ //failsafe
+		Menu.animating = false;
+		return;
+	}
 	let animProperties = (Menu.animMenu.show) ?
 	[["xDiff","targetXdiff"],["yDiff","targetYdiff"],["width","targetWidth"],["height","targetHeight"]] :
 	[["height","orgHeight"],["width","orgWidth"],["yDiff","orgYdiff"],["xDiff","orgXdiff"]];
