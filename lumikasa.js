@@ -1,7 +1,7 @@
 ﻿'use strict';
 
-//Lumikasa source code (Luokkanen Janne, 2015-2022)
-const version = "0x4C8";
+//Lumikasa source code (Luokkanen Janne, 2015-2023)
+const version = "0x4C9";
 
 function TimeNow(){
 	//return Date.now();
@@ -2076,7 +2076,9 @@ for(let step = Game.steps; step >= 1; step--){
 	snowRate = SnowRate(0.98,0);
 }
 	LoopSound(Sounds.snow,snowRate);
-	
+	RenderGame();
+}
+function RenderGame(){
 	if(Game.fixedCamera){
 		let xOffset = 0;
 		let yOffset = 0;
