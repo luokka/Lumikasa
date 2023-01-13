@@ -1,18 +1,21 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2023)
-const version = "0x4C9";
+const version = "0x4CB";
 
 function TimeNow(){
 	//return Date.now();
 	return performance.now();
 }
+function GetRender(canvas){
+	return canvas.getContext('2d', { willReadFrequently: true }); //software canvas greatly improves performance on Chromium
+}
 
-const Menu = {active:null,subMenu:null,animMenu:null,animating:false,animThreshold:0.25};
+const Menu = {active:null,subMenu:null,animMenu:null,animating:false,animForce:0.025,animThreshold:0.25};
 const Option = {selected:null,active:null,last:null,select:false,cancel:0};
 const Loading = {inProgress:true,done:false,skipAdventure:false,progress:0,barProgress:0,initStages:false,initLevels:false};
 let playerConfirm = false, firstJoined = 0;
-let animForce = 0.025;
+let defaultAnimForce = 0.025, areaScaleAnimForce = 0.001;
 let directionInputRepeatDelay = 500; //ms
 
 const Mouse = {x:0,y:0,startX:0,startY:0,axisX:0,axisY:0,draw:-1,drag:false};
@@ -126,7 +129,7 @@ for(let i = 0; i < StageImages.length; i++){
 }
 
 let stageCanvas = document.createElement('canvas');
-let stageRender = stageCanvas.getContext('2d');
+let stageRender = GetRender(stageCanvas);
 
 const Terrain = {
 	canvas:null,
@@ -236,22 +239,22 @@ for(let i = 0; i <= 4; i++){
 		Players[i].canvas = document.createElement('canvas');
 		Players[i].canvas.height = 0;
 		Players[i].canvas.width = 0;
-		Players[i].render = Players[i].canvas.getContext('2d');
+		Players[i].render = GetRender(Players[i].canvas);
 		
 		Players[i].copyCanvas = document.createElement('canvas');
 		Players[i].copyCanvas.height = 0;
 		Players[i].copyCanvas.width = 0;
-		Players[i].copyRender = Players[i].copyCanvas.getContext('2d');
+		Players[i].copyRender = GetRender(Players[i].copyCanvas);
 }
 let IngamePlayers = [];
 
 //Rendering
 let gameCanvas = document.getElementById('gameCanvas');
-let gameRender = gameCanvas.getContext('2d');
+let gameRender = GetRender(gameCanvas);
 let guiCanvas = document.createElement('canvas');
-let guiRender = guiCanvas.getContext('2d');
+let guiRender = GetRender(guiCanvas);
 let tempCanvas = document.createElement('canvas');
-let tempRender = tempCanvas.getContext('2d');
+let tempRender = GetRender(tempCanvas);
 
 const Screen = {
 	width:0,
@@ -1168,7 +1171,6 @@ function LoadLevel(lIndex){
 		
 		stageCanvas.width = Stages[lIndex].naturalWidth;
 		stageCanvas.height = Stages[lIndex].naturalHeight;
-		stageRender = stageCanvas.getContext('2d');
 		
 		Terrain.canvas = stageCanvas;
 		Terrain.render = stageRender;
@@ -1227,7 +1229,6 @@ function InitializePlayer(player,newGame){
 	
 	player.canvas.height = player.playerHeight;
 	player.canvas.width = player.playerWidth;
-	player.render = player.canvas.getContext('2d');
 	
 	player.render.fillStyle = "#FFFFFF";
 	player.render.fillRect(0,0,player.canvas.width,player.canvas.height); //ChangeSize clips a circle arc from this
@@ -1336,7 +1337,7 @@ function CreateShot(player){
 	newBall.canvas = document.createElement('canvas');
 	newBall.canvas.width = 1;
 	newBall.canvas.height = 1;
-	newBall.render = newBall.canvas.getContext('2d');
+	newBall.render = GetRender(newBall.canvas);
 	newBall.render.clearRect(0, 0, 1, 1); //is this needed?
 	
 	return newBall;
@@ -2123,15 +2124,15 @@ function RenderGame(){
 			}
 		}
 		/*if(!noCameraBounds){
-			areaScale = Math.min(Screen.width,Screen.height)/(Math.min(Terrain.canvas.width,Terrain.canvas.height)/2);
-			let newAreaScale1 = (Screen.width*Game.aimMargin)/Math.min((maxX-minX),Terrain.canvas.width*Game.aimMargin);
-			let newAreaScale2 = (Screen.height*Game.aimMargin)/Math.min((maxY-minY),Terrain.canvas.height*Game.aimMargin);
-			areaScale = Math.min(areaScale,newAreaScale1,newAreaScale2);
+			let newAreaScale1 = Math.min(Screen.width,Screen.height)/(Math.min(Terrain.canvas.width,Terrain.canvas.height)/2);
+			let newAreaScale2 = (Screen.width*Game.aimMargin)/Math.min((maxX-minX),Terrain.canvas.width*Game.aimMargin);
+			let newAreaScale3 = (Screen.height*Game.aimMargin)/Math.min((maxY-minY),Terrain.canvas.height*Game.aimMargin);
+			areaScale = AnimateValue(areaScale,Math.min(newAreaScale1,newAreaScale2,newAreaScale3),areaScaleAnimForce);
 		} else {*/
-		areaScale = Math.min(Screen.width,Screen.height)/Game.aimArea;
-		let newAreaScale1 = (Screen.width*Game.aimMargin)/(maxX-minX);
-		let newAreaScale2 = (Screen.height*Game.aimMargin)/(maxY-minY);
-		areaScale = Math.min(areaScale,newAreaScale1,newAreaScale2);
+		let newAreaScale1 = Math.min(Screen.width,Screen.height)/Game.aimArea;
+		let newAreaScale2 = (Screen.width*Game.aimMargin)/(maxX-minX);
+		let newAreaScale3 = (Screen.height*Game.aimMargin)/(maxY-minY);
+		areaScale = AnimateValue(areaScale,Math.min(newAreaScale1,newAreaScale2,newAreaScale3),areaScaleAnimForce);
 		
 		let playersCenterX = (minX+maxX)/2;
 		let playersCenterY = (minY+maxY)/2;
@@ -4120,7 +4121,7 @@ function RenderMenu(element){
 	
 	RenderText(element);
 }
-function AnimateValue(current,target,animThreshold=0,animSteps={steps:Game.steps}){ //animSteps for multiple chained animations
+function AnimateValue(current,target,animForce=defaultAnimForce,animThreshold=0,animSteps={steps:Game.steps}){ //animSteps for framerate independency
 	if(current===target)
 		return current;
 	
@@ -4149,7 +4150,7 @@ function AnimateElement(element,animProperties){
 		let prop = animProperties[ap][0];
 		let target = animProperties[ap][1];
 		
-		element[prop] = AnimateValue(element[prop],element[target],Menu.animThreshold,animSteps);
+		element[prop] = AnimateValue(element[prop],element[target],Menu.animForce,Menu.animThreshold,animSteps);
 		
 		if(element[prop]!==element[target]){
 			animationDone=false;
@@ -4505,7 +4506,7 @@ function InitializeLevels(){
 	Levels[i].xOffset = levelPosX;
 	Levels[i].yOffset = levelPosY;
 	
-	Levels[i].render = Levels[i].canvas.getContext('2d');
+	Levels[i].render = GetRender(Levels[i].canvas);
 	Levels[i].render.drawImage(Levels[i], 0, 0);
 	
 	Levels[i].colData = CreateColData(Levels[i].render.getImageData(0, 0, Levels[i].canvas.width, Levels[i].canvas.height).data);
@@ -4538,7 +4539,7 @@ function LoadingScreen(){
 	}
 	
 	if(Loading.barProgress < 1)
-		Loading.barProgress = AnimateValue(Loading.barProgress,Loading.progress,0.0001);
+		Loading.barProgress = AnimateValue(Loading.barProgress,Loading.progress,defaultAnimForce,0.0001);
 	else if(!Loading.done){
 		if(Levels.length===0){
 			GUI.main.button[0].guiState = GUIstate.Disabled;
