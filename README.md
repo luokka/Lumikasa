@@ -11,7 +11,6 @@ Stages can be added by dropping image files into the game when stage select wind
 - Adventure mode levels can crash the game on lower-end devices (very large level images)
 - Logo drawing does not work on Firefox-android for some reason?
 - Adding a large image into stage select can crash the game
-- Performance issues on chromium-based browsers
 - Game audio can break randomly?
 - Frame counter inaccurate?
 
