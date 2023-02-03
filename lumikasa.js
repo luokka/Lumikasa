@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2023)
-const version = "0x4CC";
+const version = "0x4CD";
 
 function TimeNow(){
 	//return Date.now();
@@ -1143,7 +1143,6 @@ function LoadLevel(lIndex){
 	if(Menu.active!==null || Loading.inProgress)
 		return;
 	
-	Game.levelIndex = lIndex;
 	if(Game.mode===GameMode.adventure){
 		if(lIndex<0)
 			lIndex=Levels.length-1;
@@ -1173,6 +1172,7 @@ function LoadLevel(lIndex){
 		
 		Terrain.colData = CreateColData(Terrain.render.getImageData(0, 0, Terrain.canvas.width, Terrain.canvas.height).data);
 	}
+	Game.levelIndex = lIndex;
 	InitializePlayers();
 }
 function InitializeGame(level){
@@ -1236,10 +1236,10 @@ function InitializePlayer(player,newGame){
 		for(let cY = 0; cY < colHeight-31; cY+=8){ //finding all empty spots in the stage large enough for spawning (8x8 grid based, 32x32 minimum spawn area)
 			spawnSearchLoop2:
 			for(let cX = 0; cX < colWidth-4; cX++){
-				if(Terrain.colData[cY*colWidth+cX]===0){
+				if(Terrain.colData[cY*colWidth+cX]===0){ //8 empty horizontal pixels
 					for(let cYs = 0; cYs < 32; cYs++){
 						let col = (cY+cYs)*colWidth+cX;
-						if(Terrain.colData[col] + Terrain.colData[col+1] + Terrain.colData[col+2] + Terrain.colData[col+3] > 0) //32 empty horizontal pixels
+						if(Terrain.colData[col] + Terrain.colData[col+1] + Terrain.colData[col+2] + Terrain.colData[col+3] > 0) //not 32 empty horizontal pixels
 							continue spawnSearchLoop2;
 					}
 					spawnPositions.push({x:(cX << 3),y:cY}); //cX multiply by 8
@@ -1682,9 +1682,9 @@ function PlayerTerrainCollision(player){
 	player.onGround = false;
 	Terrain.ResetCollided();
 	
-	for(let colPoint of player.colPoints){
-		let blockX = colPoint.x;
-		let blockY = colPoint.y;
+	for(let i = 0; i < player.colPoints.length; i++){
+		let blockX = player.colPoints[i].x;
+		let blockY = player.colPoints[i].y;
 		
 		let levelInfo = UpdateLevelData(player.level,Math.floor(player.playerPosX-levelPosX+blockX),Math.floor(player.playerPosY-levelPosY+blockY));
 		player.level = levelInfo.level;
