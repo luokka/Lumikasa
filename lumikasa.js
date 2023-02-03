@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2023)
-const version = "0x4CB";
+const version = "0x4CC";
 
 function TimeNow(){
 	//return Date.now();
@@ -340,8 +340,8 @@ let KeyBindings = []; //upKey,downKey,leftKey,rightKey,jumpKey,chargeKey,chargeH
 function GetDefaultBindings(defaultBindings){
 	let bindings = [];
 	
-	for(let key = 0; key < defaultBindings.length; key++)
-		bindings.push({name:defaultBindings[key].name.slice(), input:defaultBindings[key].input.slice(), deadzone:defaultBindings[key].deadzone, value:new Array(defaultBindings[key].input.length).fill(0), blocked:new Array(defaultBindings[key].input.length).fill(false)});
+	for(let defaultBinding of defaultBindings)
+		bindings.push({name:defaultBinding.name.slice(), input:defaultBinding.input.slice(), deadzone:defaultBinding.deadzone, value:new Array(defaultBinding.input.length).fill(0), blocked:new Array(defaultBinding.input.length).fill(false)});
 	
 	return bindings;
 }
@@ -356,7 +356,6 @@ const KeyBind = {
 	inputType:-1,
 	player:1
 };
-let gamepads;
 let gamepadTemp = null;
 const InputMethods = [
 {id:"Keyboard&Mouse", index:-1, players:[1]}
@@ -498,14 +497,12 @@ function PlaySound(sound){
 		if(Sounds.hasOwnProperty(sound))
 			StopSound(Sounds[sound]);
 	}
-	for(let p = 0; p < Players.length; p++){
-		let player = Players[p];
+	for(let player of Players){
 		for(let sound in player.Sounds){
 			if(player.Sounds.hasOwnProperty(sound))
 				StopSound(player.Sounds[sound]);
 		}
-		for(let b = 0; b < player.Balls.length; b++){
-			let ball = player.Balls[b];
+		for(let ball of player.Balls){
 			for(let sound in ball.Sounds){
 				if(ball.Sounds.hasOwnProperty(sound))
 					StopSound(ball.Sounds[sound]);
@@ -544,10 +541,10 @@ function UpdateMultiplier(value){ //pre-calculate movement values
 	let speedModifier = newSpeedMultiplier/Game.speedMultiplier;
 	Game.speedMultiplier = newSpeedMultiplier;
 	
-	for(let p = 0; p < IngamePlayers.length; p++){
-		IngamePlayers[p].momentumX *= speedModifier;
-		IngamePlayers[p].momentumY *= speedModifier;
-		IngamePlayers[p].rotMomentum *= speedModifier;
+	for(let ingamePlayer of IngamePlayers){
+		ingamePlayer.momentumX *= speedModifier;
+		ingamePlayer.momentumY *= speedModifier;
+		ingamePlayer.rotMomentum *= speedModifier;
 	}
 	
 	Game.maxSpeed = Game.basemaxSpeed*Game.speedMultiplier;
@@ -653,12 +650,12 @@ function DirectionalKey(player, inputType, state, value){
 		let Bind = KeyBindings[player.number];
 		//checking if mouseAxis is assigned to aimAxes
 		for(let type = Input.aimXneg; type <= Input.aimXpos; type++)
-		for(let axis = 0; axis < Bind[type].input.length; axis++)
-			mouseXaim = (Bind[type].input[axis][1] === 'm' || mouseXaim);
+		for(let axis of Bind[type].input)
+			mouseXaim = (axis[1] === 'm' || mouseXaim);
 		
 		for(let type = Input.aimYneg; type <= Input.aimYpos; type++)
-		for(let axis = 0; axis < Bind[type].input.length; axis++)
-			mouseYaim = (Bind[type].input[axis][1] === 'm' || mouseYaim);
+		for(let axis of Bind[type].input)
+			mouseYaim = (axis[1] === 'm' || mouseYaim);
 	}
 	if(mouseXaim)
 		player.aimX=(player.aimAxisX*Screen.width+Screen.width)/2/areaScale;
@@ -724,8 +721,7 @@ function SetInput(inputType,inputState,player,value){
 }
 function InputUpdate(input,players,value){
 	let validInput = false;
-	for(let pl = 0; pl < players.length; pl++){
-		let playerNum = players[pl];
+	for(let playerNum of players){
 		let keyBind = KeyBindings[playerNum];
 		for(let k = 0; k < keyBind.length; k++){
 			for(let i = 0; i < keyBind[k].input.length; i++){
@@ -912,13 +908,13 @@ gameCanvas.addEventListener('wheel', function(event){
 });
 gameCanvas.addEventListener('drop', function(event){
 	event.preventDefault();
-	for(let i = 0; i < event.dataTransfer.files.length; i++){
+	for(let file of event.dataTransfer.files){
 		if(Menu.subMenu!==GUI.battle || playerConfirm || Menu.animating){
-			gameCanvas.style.backgroundImage = "url('"+URL.createObjectURL(event.dataTransfer.files[i])+"')";
+			gameCanvas.style.backgroundImage = "url('"+URL.createObjectURL(file)+"')";
 			break;
 		}
 		let customStageImage = new Image();
-		customStageImage.src = URL.createObjectURL(event.dataTransfer.files[i]);
+		customStageImage.src = URL.createObjectURL(file);
 		
 		loadStageCount++;
 		
@@ -966,16 +962,14 @@ window.addEventListener('gamepaddisconnected', function(event){
 	UpdateInputMethods();
 });*/
 function UpdateInputMethods(){
-	gamepads = navigator.getGamepads();
-	
 	for(let pl = 1; pl < Players.length; pl++)
 		Players[pl].inputMethod = -1;
 	
 	InputMethods.splice(1);
 	InputMethods[0].players = [];
-	for(let gp = 0; gp < gamepads.length; gp++){
-		if(gamepads[gp] !== null && gamepads[gp].connected)
-			InputMethods.push({id:gamepads[gp].id, index:gamepads[gp].index, players:[]});
+	for(let gamepad of navigator.getGamepads()){
+		if(gamepad !== null && gamepad.connected)
+			InputMethods.push({id:gamepad.id, index:gamepad.index, players:[]});
 	}
 	for(let im = 0; im < InputMethods.length; im++){
 		for(let pl = 1; pl < Players.length; pl++){
@@ -991,10 +985,10 @@ function UpdateInputMethods(){
 	UpdateInputMethodMenu();
 }
 function CheckGamepads(){
-	gamepads = navigator.getGamepads();
+	let gamepads = navigator.getGamepads();
 	let emptyGamepads = 0;
-	for(let gp = 0; gp < gamepads.length; gp++){
-		if(gamepads[gp] === null || !gamepads[gp].connected) //checking for empty gamepads
+	for(let gamepad of gamepads){
+		if(gamepad === null || !gamepad.connected) //checking for empty gamepads
 			emptyGamepads++;
 	}
 	if(gamepads.length-emptyGamepads !== InputMethods.length-1){
@@ -1007,19 +1001,19 @@ function CheckGamepads(){
 		return;
 	
 	for(let im = 1; im < InputMethods.length; im++){
-		let gp = InputMethods[im].index;
+		let gamepad = gamepads[InputMethods[im].index];
 		
-		if(gamepads[gp] === null) //failsafe if gamepad disconnects during a session (Add !gamepads[gp].connected if gamepads[gp] is not null?)
+		if(gamepad === null) //failsafe if gamepad disconnects during a session (Add !gamepad.connected if gamepad is not null?)
 			continue;
 		
-		for(let b = 0; b < gamepads[gp].buttons.length; b++)
-			InputUpdate(b,InputMethods[im].players,gamepads[gp].buttons[b].value);
+		for(let b = 0; b < gamepad.buttons.length; b++)
+			InputUpdate(b,InputMethods[im].players,gamepad.buttons[b].value);
 		
-		for(let a = 0; a < gamepads[gp].axes.length; a++){
-			let axisCode = Math.sign(gamepads[gp].axes[a])===1 ? "+a"+a : "-a"+a;
-			let inverseAxisCode = Math.sign(gamepads[gp].axes[a])===1 ? "-a"+a : "+a"+a;
+		for(let a = 0; a < gamepad.axes.length; a++){
+			let axisCode = Math.sign(gamepad.axes[a])===1 ? "+a"+a : "-a"+a;
+			let inverseAxisCode = Math.sign(gamepad.axes[a])===1 ? "-a"+a : "+a"+a;
 			
-			InputUpdate(axisCode,InputMethods[im].players,gamepads[gp].axes[a]);
+			InputUpdate(axisCode,InputMethods[im].players,gamepad.axes[a]);
 			InputUpdate(inverseAxisCode,InputMethods[im].players,0);
 		}
 	}
@@ -1028,33 +1022,33 @@ function CheckGamepads(){
 		if(Players[KeyBind.player].inputMethod < 1)
 			return;
 		
-		let gp = InputMethods[Players[KeyBind.player].inputMethod].index; //or Players[KeyBind.player].inputInfo.index
+		let gamepad = gamepads[InputMethods[Players[KeyBind.player].inputMethod].index]; //or Players[KeyBind.player].inputInfo.index
 		
 		if(gamepadTemp.axisValues.length===0 && gamepadTemp.buttonValues.length===0){
-			for(let b = 0; b < gamepads[gp].buttons.length; b++)
-				gamepadTemp.buttonValues.push(gamepads[gp].buttons[b].value);
-			for(let a = 0; a < gamepads[gp].axes.length; a++)
-				gamepadTemp.axisValues.push(Math.abs(gamepads[gp].axes[a]));
+			for(let button of gamepad.buttons)
+				gamepadTemp.buttonValues.push(button.value);
+			for(let axis of gamepad.axes)
+				gamepadTemp.axisValues.push(Math.abs(axis));
 		}
 		let currentDeadzone = KeyBindings[KeyBind.player][KeyBind.inputType].deadzone;
-		for(let b = 0; b < gamepads[gp].buttons.length; b++){
-			if(gamepads[gp].buttons[b].value>=gamepadTemp.buttonValues[b] && gamepadTemp.buttonValues[b]>currentDeadzone) //prevents immediate keybind
+		for(let b = 0; b < gamepad.buttons.length; b++){
+			if(gamepad.buttons[b].value>=gamepadTemp.buttonValues[b] && gamepadTemp.buttonValues[b]>currentDeadzone) //prevents immediate keybind
 				continue;
 			
 			gamepadTemp.buttonValues[b] = 0; //disables the first if statement
-			if(gamepads[gp].buttons[b].value > 0.9){
+			if(gamepad.buttons[b].value > 0.9){
 				SetKeyBind("Joy("+b+")", b);
 				StopKeyBind();
 				return;
 			}
 		}
-		for(let a = 0; a < gamepads[gp].axes.length; a++){
-			if(Math.abs(gamepads[gp].axes[a])>=gamepadTemp.axisValues[a] && gamepadTemp.axisValues[a]>currentDeadzone) //prevents immediate keybind
+		for(let a = 0; a < gamepad.axes.length; a++){
+			if(Math.abs(gamepad.axes[a])>=gamepadTemp.axisValues[a] && gamepadTemp.axisValues[a]>currentDeadzone) //prevents immediate keybind
 				continue;
 			
 			gamepadTemp.axisValues[a] = 0; //disables the first if statement
-			if(Math.abs(gamepads[gp].axes[a]) > 0.9){
-				let axisSign = Math.sign(gamepads[gp].axes[a])===1 ? "+" : "-";
+			if(Math.abs(gamepad.axes[a]) > 0.9){
+				let axisSign = Math.sign(gamepad.axes[a])===1 ? "+" : "-";
 				let axisName = axisSign + "Axis("+a+")";
 				let axisCode = axisSign + "a"+a;
 				
@@ -1158,8 +1152,8 @@ function LoadLevel(lIndex){
 		
 		SetTerrainProperties(lIndex);
 		
-		for(let p = 0; p < IngamePlayers.length; p++)
-			IngamePlayers[p].level = lIndex;
+		for(let ingamePlayer of IngamePlayers)
+			ingamePlayer.level = lIndex;
 		
 		levelPosX = -Levels[lIndex].xOffset;
 		levelPosY = -Levels[lIndex].yOffset;
@@ -1192,9 +1186,9 @@ function InitializeGame(level){
 	}
 	
 	IngamePlayers = [];
-	for(let ap = 0; ap < Players.length; ap++){
-		if(Players[ap].joined)
-			IngamePlayers.push(Players[ap]);
+	for(let player of Players){
+		if(player.joined)
+			IngamePlayers.push(player);
 	}
 	
 	LoadLevel(level);
@@ -1204,16 +1198,16 @@ function InitializeGame(level){
 	Game.lastTime = TimeNow(); //adds a little delay when the game starts
 }
 function InitializePlayers(){
-	for(let p = 0; p < IngamePlayers.length; p++)
-		InitializePlayer(IngamePlayers[p],true);
+	for(let ingamePlayer of IngamePlayers)
+		InitializePlayer(ingamePlayer,true);
 }
 function InitializePlayer(player,newGame){
 	if(newGame){
 		player.lives = Game.lifeCount;
 		player.score = 0;
 		player.statusVisibility = 0;
-		for(let b = 0; b < player.Balls.length; b++)
-			StopLoops(player.Balls[b].Sounds);
+		for(let ball of player.Balls)
+			StopLoops(ball.Sounds);
 		player.Balls = [];
 	}
 	player.pixelCountMax = 100;
@@ -1245,7 +1239,7 @@ function InitializePlayer(player,newGame){
 				if(Terrain.colData[cY*colWidth+cX]===0){
 					for(let cYs = 0; cYs < 32; cYs++){
 						let col = (cY+cYs)*colWidth+cX;
-						if(Terrain.colData[col] + Terrain.colData[col+1] + Terrain.colData[col+2] + Terrain.colData[col+3] > 0)
+						if(Terrain.colData[col] + Terrain.colData[col+1] + Terrain.colData[col+2] + Terrain.colData[col+3] > 0) //32 empty horizontal pixels
 							continue spawnSearchLoop2;
 					}
 					spawnPositions.push({x:(cX << 3),y:cY}); //cX multiply by 8
@@ -1294,7 +1288,7 @@ function ChangeSize(change, player){
 	player.colTop = player.colRadius*(-0.9)+player.colMiddle;
 	player.colBottom = player.colRadius*0.9+player.colMiddle;
 	
-	player.colPoints = []; //colValues are used only for terrain collision
+	player.colPoints = []; //these are used only for terrain collision
 	let angle=89;
 	let angleStep=0;
 	let flip=true;
@@ -1528,14 +1522,11 @@ function BallBallCollision(ball1,ball2){
 	let ball2X = ball2.ballPosX+ball2.ballRadius;
 	if(!CircleOverlap(ball2X-ballX, ball2Y-ballY, ball2.ballRadius+ball1.ballRadius+1))
 		return;
-	for(let v = 0; v < ball1.Vectors.length; v++){
-		let ballVector1 = ball1.Vectors[v];
+	for(let ballVector1 of ball1.Vectors){
 		if(ballVector1.length===0) //if empty ballVector has not been removed yet
 			continue;
 		if(ball2.isMoving){
-			for(let v2 = 0; v2 < ball2.Vectors.length; v2++){
-				let ballVector2 = ball2.Vectors[v2];
-				
+			for(let ballVector2 of ball2.Vectors){
 				let bX1 = ballVector1[0].x, bX2 = ballVector1[ballVector1.length-1].x;
 				let b2X1 = ballVector2[0].x, b2X2 = ballVector2[ballVector2.length-1].x;
 				let bXmin = Math.min(bX1,bX2)+ball1.ballPosX;
@@ -1602,8 +1593,7 @@ function BallPlayerCollision(ball,player){
 	let playerX = player.playerPosX+player.playerRadius;
 	if(!CircleOverlap(playerX-ballX, playerY-ballY, player.playerRadius+ball.ballRadius+1))
 		return false;
-	for(let v = 0; v < ball.Vectors.length; v++){
-		let ballVector = ball.Vectors[v];
+	for(let ballVector of ball.Vectors){
 		for(let i = 0; i < ballVector.length; i+=Game.updateInterval){
 			let ballBlockY = ball.ballPosY+ballVector[i].y;
 			let ballBlockX = ball.ballPosX+ballVector[i].x;
@@ -1622,8 +1612,7 @@ function BallPlayerCollision(ball,player){
 }
 function BallTerrainCollision(ball,ballPosDiff){
 	let blockStep = (ball.firstColCheck) ? Game.updateInterval : 1;
-	for(let v = 0; v < ball.Vectors.length; v++){
-		let ballVector = ball.Vectors[v];
+	for(let ballVector of ball.Vectors){
 		let ballPosStep = 0;
 		for(let i = 0; i < ballVector.length; i+=blockStep){
 			if(!ball.firstColCheck){
@@ -1693,9 +1682,9 @@ function PlayerTerrainCollision(player){
 	player.onGround = false;
 	Terrain.ResetCollided();
 	
-	for(let i = 0; i < player.colPoints.length; i++){
-		let blockX = player.colPoints[i].x;
-		let blockY = player.colPoints[i].y;
+	for(let colPoint of player.colPoints){
+		let blockX = colPoint.x;
+		let blockY = colPoint.y;
 		
 		let levelInfo = UpdateLevelData(player.level,Math.floor(player.playerPosX-levelPosX+blockX),Math.floor(player.playerPosY-levelPosY+blockY));
 		player.level = levelInfo.level;
@@ -1832,9 +1821,7 @@ function CheckPlayerInsideTerrain(player,posDiffX,posDiffY){
 }
 function GameLogic(){
 for(let step = Game.steps; step >= 1; step--){
-	for(let p = 0; p < IngamePlayers.length; p++){
-		let player = IngamePlayers[p];
-		
+	for(let player of IngamePlayers){
 		if(player.left){
 			if(Game.noClip)
 				player.playerPosX -= Game.maxSpeed*player.leftValue;
@@ -2033,8 +2020,8 @@ for(let step = Game.steps; step >= 1; step--){
 					}
 				}
 				if(!Game.noPile)
-					for(let b2 = 0; b2 < otherPlayer.Balls.length; b2++)
-						BallBallCollision(ball,otherPlayer.Balls[b2]);
+					for(let ball2 of otherPlayer.Balls)
+						BallBallCollision(ball,ball2);
 			}
 			
 			BallTerrainCollision(ball,ballPosDiff);
@@ -2085,10 +2072,10 @@ function RenderGame(){
 		let yOffset = 0;
 		let areaCanvas = Terrain.canvas;
 		if(Game.mode===GameMode.adventure){
-			let l = Players[firstJoined].level;
-			xOffset = Levels[l].xOffset;
-			yOffset = Levels[l].yOffset;
-			areaCanvas = Levels[l].canvas;
+			let level = Levels[Players[firstJoined].level];
+			xOffset = level.xOffset;
+			yOffset = level.yOffset;
+			areaCanvas = level.canvas;
 		}
 		areaScale = Math.min(Screen.width/areaCanvas.width,Screen.height/areaCanvas.height);
 		let levelOffsetX = (Screen.width/areaScale-areaCanvas.width)/2-xOffset;
@@ -2097,9 +2084,9 @@ function RenderGame(){
 			if(!Players[p].joined)
 				continue;
 			
-			for(let b = 0; b < Players[p].Balls.length; b++){
-				Players[p].Balls[b].ballPosX -= levelPosX-levelOffsetX;
-				Players[p].Balls[b].ballPosY -= levelPosY-levelOffsetY;
+			for(let ball of Players[p].Balls){
+				ball.ballPosX -= levelPosX-levelOffsetX;
+				ball.ballPosY -= levelPosY-levelOffsetY;
 			}
 			Players[p].playerPosX -= levelPosX-levelOffsetX;
 			Players[p].playerPosY -= levelPosY-levelOffsetY;
@@ -2165,17 +2152,15 @@ function RenderGame(){
 			if(!Players[p].joined)
 				continue;
 			
-			for(let b = 0; b < Players[p].Balls.length; b++){
-				Players[p].Balls[b].ballPosX += xPositionChange;
-				Players[p].Balls[b].ballPosY += yPositionChange;
+			for(let ball of Players[p].Balls){
+				ball.ballPosX += xPositionChange;
+				ball.ballPosY += yPositionChange;
 			}
 			Players[p].playerPosX += xPositionChange;
 			Players[p].playerPosY += yPositionChange;
 		}
 	}
-	for(let p = 0; p < IngamePlayers.length; p++){
-		let player = IngamePlayers[p];
-		
+	for(let player of IngamePlayers){
 		Aim(player); //update AimX/Y
 		if(player.Balls.length > 0){
 			let ball = player.Balls[player.Balls.length-1];
@@ -2192,12 +2177,12 @@ function RenderGame(){
 	}
 	
 	if(Game.mode===GameMode.adventure){
-		for(let l = 0; l < Levels.length; l++){ //floor(pos) and ceil(size) prevent vertical lines (Out of bounds area color)
-			let scaledLevelPosX = Math.floor((levelPosX+Levels[l].xOffset)*areaScale), scaledLevelPosY = Math.floor((levelPosY+Levels[l].yOffset)*areaScale);
-			let scaledLevelWidth = Math.ceil(Levels[l].canvas.width*areaScale), scaledLevelHeight = Math.ceil(Levels[l].canvas.height*areaScale);
+		for(let level of Levels){ //floor(pos) and ceil(size) prevent vertical lines (Out of bounds area color)
+			let scaledLevelPosX = Math.floor((levelPosX+level.xOffset)*areaScale), scaledLevelPosY = Math.floor((levelPosY+level.yOffset)*areaScale);
+			let scaledLevelWidth = Math.ceil(level.canvas.width*areaScale), scaledLevelHeight = Math.ceil(level.canvas.height*areaScale);
 			if(scaledLevelPosX<Screen.width && scaledLevelPosX+scaledLevelWidth>0 && scaledLevelPosY<Screen.height && scaledLevelPosY+scaledLevelHeight>0){ //off-screen canvases are not rendered
 				gameRender.clearRect(scaledLevelPosX, scaledLevelPosY, scaledLevelWidth, scaledLevelHeight);
-				gameRender.drawImage(Levels[l].canvas,0,0,Levels[l].canvas.width,Levels[l].canvas.height,scaledLevelPosX,scaledLevelPosY,scaledLevelWidth,scaledLevelHeight);
+				gameRender.drawImage(level.canvas,0,0,level.canvas.width,level.canvas.height,scaledLevelPosX,scaledLevelPosY,scaledLevelWidth,scaledLevelHeight);
 			}
 		}
 	} else {
@@ -2212,9 +2197,7 @@ function RenderGame(){
 		gameRender.lineWidth = 3*Screen.guiScale;
 		gameRender.setLineDash([]);
 	}
-	for(let p = 0; p < IngamePlayers.length; p++){
-		let player = IngamePlayers[p];
-		
+	for(let player of IngamePlayers){
 		if(player.invulnerability > 0)
 			gameRender.globalAlpha = 0.5;
 		gameRender.drawImage(player.canvas,0,0,player.playerWidth,player.playerHeight,player.playerPosX*areaScale,player.playerPosY*areaScale,player.playerWidth*areaScale,player.playerHeight*areaScale);
@@ -2231,14 +2214,12 @@ function RenderGame(){
 		if(!player.joined)
 			continue;
 		
-		for(let b = 0; b < player.Balls.length; b++)
-			gameRender.drawImage(player.Balls[b].canvas,0,0,player.Balls[b].canvas.width,player.Balls[b].canvas.height,player.Balls[b].ballPosX*areaScale,player.Balls[b].ballPosY*areaScale,player.Balls[b].canvas.width*areaScale,player.Balls[b].canvas.height*areaScale);
+		for(let ball of player.Balls)
+			gameRender.drawImage(ball.canvas,0,0,ball.canvas.width,ball.canvas.height,ball.ballPosX*areaScale,ball.ballPosY*areaScale,ball.canvas.width*areaScale,ball.canvas.height*areaScale);
 	}
 	gameRender.lineWidth = 3*Screen.guiScale;
 	gameRender.setLineDash([5*Screen.guiScale,10*Screen.guiScale]);
-	for(let p = 0; p < IngamePlayers.length; p++){
-		let player = IngamePlayers[p];
-		
+	for(let player of IngamePlayers){
 		if(!player.aimCentered){
 			gameRender.beginPath();
 			gameRender.moveTo((player.playerPosX+player.playerRadius)*areaScale,(player.playerPosY+player.playerRadius)*areaScale);
@@ -2252,9 +2233,7 @@ function RenderGame(){
 		}
 	}
 	if(Game.mode===GameMode.battle){
-		for(let p = 0; p < IngamePlayers.length; p++){
-			let player = IngamePlayers[p];
-			
+		for(let player of IngamePlayers){
 			if(player.statusVisibility > 0){
 				gameRender.fillStyle = PlayerColor[player.number].color;
 				gameRender.font = Math.max(player.playerHeight*areaScale,30)+"px Arial";
@@ -3146,9 +3125,7 @@ function GetClosestOption(direction,option){
 	let guiWidth = (guiElement.type==="title") ? guiElement.orgWidth : guiElement.width;
 	let guiRight = guiLeft+guiWidth;
 	
-	for(let e = 0; e < menuGUI.options.length; e++){
-		let newElement = menuGUI.options[e];
-		
+	for(let newElement of menuGUI.options){
 		if(guiElement===newElement || newElement.guiState !== GUIstate.Enabled)
 			continue;
 		
@@ -3210,8 +3187,7 @@ function PushGuiNavInput(inputType){
 }
 function NavigateGUI(){
 	let optionChanged = false;
-	for(let i = 0; i < guiNavInputs.length; i++){
-		let input = guiNavInputs[i];
+	for(let input of guiNavInputs){
 		if(input===Input.confirm){
 			Option.select = true;
 			break;
@@ -3301,9 +3277,7 @@ function CheckMouse(clicked){
 	
 	let menuGUI = CurrentMenu();
 	
-	for(let e = 0; e < menuGUI.options.length; e++){
-		let guiElement = menuGUI.options[e];
-		
+	for(let guiElement of menuGUI.options){
 		if(guiElement.type === "title" && !Mouse.drag && Option.active===null){
 			guiY = Screen.scaledHeightHalf+guiElement.yDiff;
 			guiX = Screen.scaledWidthHalf+guiElement.xDiff;
@@ -3553,11 +3527,11 @@ function Battle(){
 			GUI.battle.label[2].guiState = (Game.type===GameType.score) ? GUIstate.Enabled : GUIstate.Hidden;
 			GUI.battle.label[3].guiState = (Game.type===GameType.life) ? GUIstate.Enabled : GUIstate.Hidden;
 			
-			for(let i = 0; i < GUI.battle.adjustbox.length; i++)
-				SetAdjustNumber(GUI.battle.adjustbox[i], GUI.battle.adjustbox[i].value);
+			for(let adjustbox of GUI.battle.adjustbox)
+				SetAdjustNumber(adjustbox, adjustbox.value);
 			
-			for(let i = 0; i < GUI.battle.checkbox.length; i++)
-				GUI.battle.checkbox[i].data = (GUI.battle.checkbox[i].value) ? Enable : Disable;
+			for(let checkbox of GUI.battle.checkbox)
+				checkbox.data = (checkbox.value) ? Enable : Disable;
 			
 			RenderElements(GUI.battle);
 			
@@ -3660,8 +3634,8 @@ function Options(){
 					Players[KeyBind.player].inputInfo = {id:"noinput", index:null};
 				
 				UpdateInputMethods();
-				for(let pl = 0; pl < Players.length; pl++)
-					Players[pl].confirmKey = false;
+				for(let player of Players)
+					player.confirmKey = false;
 			}
 			HideMenu(Option.active);
 		} else {
@@ -3682,8 +3656,8 @@ function Options(){
 		SetAdjustNumber(GUI.options.adjustbox[0], Math.floor((6-Game.updateInterval)*20));
 		SetAdjustNumber(GUI.options.adjustbox[1], Math.round(Game.soundVolume*100));
 		
-		for(let i = 0; i < GUI.options.checkbox.length; i++)
-			GUI.options.checkbox[i].data = (GUI.options.checkbox[i].value) ? Enable : Disable;
+		for(let checkbox of GUI.options.checkbox)
+			checkbox.data = (checkbox.value) ? Enable : Disable;
 		
 		let guiElement = GUI.options.background[0]; //StickAim test area
 		guiElement.guiState = (Players[KeyBind.player].inputMethod!==-1) ? GUIstate.Enabled : GUIstate.Disabled;
@@ -3695,8 +3669,7 @@ function Options(){
 		if(Players[KeyBind.player].inputMethod!==-1 && !Menu.animating)
 			DzSlider.width = AnimateValue(DzSlider.width,DzSlider.target);
 		
-		for(let i = 0; i < GUI.options.inputfield.length; i++){
-			let guiElement = GUI.options.inputfield[i];
+		for(let guiElement of GUI.options.inputfield){
 			guiElement.guiState = (Players[KeyBind.player].inputMethod!==-1) ? GUIstate.Enabled : GUIstate.Disabled;
 			guiElement.button[0].guiState = guiElement.guiState; //add-button
 			if(guiElement.guiState === GUIstate.Enabled){
@@ -3715,8 +3688,7 @@ function Options(){
 				guiElement.pText = "";
 		}
 		
-		for(let i = 0; i < GUI.options.button.length; i++){
-			let guiElement = GUI.options.button[i];
+		for(let guiElement of GUI.options.button){
 			if(guiElement.hasOwnProperty("player")){
 				let playerIsActive = (KeyBind.player === guiElement.player);
 				guiElement.textColor = (playerIsActive) ? guiElement.textHglColor : PlayerColor[guiElement.player].color;
@@ -3839,8 +3811,8 @@ function Results(){
 			}
 		}
 		
-		for(let b = 0; b < GUI.results.background.length; b++)
-			GUI.results.background[b].guiState = GUIstate.Hidden;
+		for(let background of GUI.results.background)
+			background.guiState = GUIstate.Hidden;
 		
 		let sizeDiff = 50;
 		for(let w = 0; w < Winners.length; w++){
@@ -3995,26 +3967,24 @@ function RenderOption(element){
 }
 function RenderElements(parentGUI){ //elements are rendered in this order
 	if(parentGUI.hasOwnProperty("background")){
-		for(let b = 0; b < parentGUI.background.length; b++)
-			RenderOption(parentGUI.background[b]);
+		for(let background of parentGUI.background)
+			RenderOption(background);
 	}
 	if(parentGUI.hasOwnProperty("label")){
-		for(let l = 0; l < parentGUI.label.length; l++)
-			RenderText(parentGUI.label[l]);
+		for(let label of parentGUI.label)
+			RenderText(label);
 	}
 	if(parentGUI.hasOwnProperty("number")){
-		for(let n = 0; n < parentGUI.number.length; n++){
-			parentGUI.number[n].selected = (Option.active===parentGUI);
-			RenderText(parentGUI.number[n]);
+		for(let number of parentGUI.number){
+			number.selected = (Option.active===parentGUI);
+			RenderText(number);
 		}
 	}
 	let elementTypes = Object.getOwnPropertyNames(parentGUI);
-	for(let t = 0; t < elementTypes.length; t++){ //rest of the elements
-		let elementType = elementTypes[t];
+	for(let elementType of elementTypes){ //rest of the elements
 		if(elementType !== "button" && elementType !== "checkbox" && elementType !== "inputfield" && elementType !== "adjustbox")
 			continue; //stagebuttons are rendered manually and dropdowns are rendered last
-		for(let e = 0; e < parentGUI[elementType].length; e++){ //only checking elements that are inside an array (ignores title)
-			let element = parentGUI[elementType][e];
+		for(let element of parentGUI[elementType]){ //only checking elements that are inside an array (ignores title)
 			if(GUI[element.menu]===CurrentMenu())
 				continue;
 			
@@ -4050,8 +4020,7 @@ function RenderElements(parentGUI){ //elements are rendered in this order
 		}
 	}
 	if(parentGUI.hasOwnProperty("dropdown")){
-		for(let d = 0; d < parentGUI.dropdown.length; d++){
-			let element = parentGUI.dropdown[d];
+		for(let element of parentGUI.dropdown){
 			element.selected = (Option.selected===element && Option.active!==element);
 			element.pText = (Option.active!==element) ? element.item[element.activeItem].pText : "";
 			element.targetHeight = element.item.length*element.orgHeight;
@@ -4146,9 +4115,9 @@ function AnimateValue(current,target,animForce=defaultAnimForce,animThreshold=0,
 function AnimateElement(element,animProperties){
 	let animationDone = true;
 	let animSteps = {steps:Game.steps};
-	for(let ap = 0; ap < animProperties.length; ap++){
-		let prop = animProperties[ap][0];
-		let target = animProperties[ap][1];
+	for(let animProperty of animProperties){
+		let prop = animProperty[0];
+		let target = animProperty[1];
 		
 		element[prop] = AnimateValue(element[prop],element[target],Menu.animForce,Menu.animThreshold,animSteps);
 		
@@ -4284,15 +4253,15 @@ function SetKeyBind(name, input){
 		keyBind.value.push(0);
 	}
 	if(Players[KeyBind.player].inputMethod>0){ //not keyboard&mouse
-		for(let key = 0; key < KeyBindings[KeyBind.player].length; key++)
-			KeyBindings[KeyBind.player][key].blocked = new Array(KeyBindings[KeyBind.player][key].input.length).fill(true); //prevents immediate input after keybind
+		for(let binding of KeyBindings[KeyBind.player])
+			binding.blocked = new Array(binding.input.length).fill(true); //prevents immediate input after keybind
 	}
 }
 function ResetKeyValues(){ //for save loading
 	for(let pl = 0; pl < Players.length; pl++){
-		for(let key = 0; key < KeyBindings[pl].length; key++){
-			KeyBindings[pl][key].value = new Array(KeyBindings[pl][key].input.length).fill(0);
-			KeyBindings[pl][key].blocked = new Array(KeyBindings[pl][key].input.length).fill(false);
+		for(let binding of KeyBindings[pl]){
+			binding.value = new Array(binding.input.length).fill(0);
+			binding.blocked = new Array(binding.input.length).fill(false);
 		}
 	}
 }
@@ -4482,8 +4451,8 @@ function LoadGame(){
 }
 function InitializeLevels(){
 	if(Loading.skipAdventure){
-		for(let l = 0; l < Levels.length; l++)
-			Levels[l].src = ""; //cancel load
+		for(let level of Levels)
+			level.src = ""; //cancel load
 		
 		Levels = [];
 		loadLevelCount = 0;
