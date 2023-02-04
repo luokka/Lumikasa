@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2023)
-const version = "0x4CD";
+const version = "0x4D0";
 
 function TimeNow(){
 	//return Date.now();
@@ -81,6 +81,7 @@ const Game = {
 	shotSpeed:5,
 	aimArea:1000,
 	aimMargin:0.6,
+	panMultiplier:100,
 	winScore:5,
 	lifeCount:3,
 	levelIndex:0,
@@ -276,6 +277,7 @@ const Screen = {
 let guiX=0,guiY=0;
 let levelPosX=0,levelPosY=0;
 let areaScale=1;
+let middleOffsetX=0,middleOffsetY=0;
 let ballX=0,ballY=0;
 let ballLevelX=0,ballLevelY=0;
 const degToRad = Math.PI/180;
@@ -406,6 +408,8 @@ const DebugKeys = {
 	KeyL(){Game.aimMargin = Clamp(Game.aimMargin*1.02, 0.0001, 1);},
 	KeyI(){Game.aimArea = Clamp(Game.aimArea*0.98, 1, Infinity);},
 	KeyK(){Game.aimArea = Clamp(Game.aimArea*1.02, 1, Infinity);},
+	KeyU(){if(Game.panMultiplier>0) Game.panMultiplier--;},
+	KeyO(){Game.panMultiplier++;},
 	Home(){Game.updateInterval++;},
 	End(){if(Game.updateInterval>1) Game.updateInterval--;},
 	PageUp(){UpdateMultiplier(Game.speedMultiplier+1);},
@@ -435,17 +439,17 @@ const PerfInfo = {
 		//this.frameTimeLog=[];
 		this.frameInfo="";
 		this.fpsInfo="";
-		this.frameUpdate=TimeNow();
+		this.lastTime=TimeNow();
 		this.fpsUpdate=TimeNow();
 	},
 	LogFrame(currentTime){
 		this.frameCount++;
 		this.totalFrameCount++;
-		this.frameTime = currentTime-this.frameUpdate;
+		this.frameTime = currentTime-this.lastTime;
 		this.frameTimeMax = Math.max(this.frameTime,this.frameTimeMax);
 		//this.frameTimeLog.push(this.frameTime);
 		this.frameInfo = "Frame:"+this.totalFrameCount+" | "+this.frameTime.toFixed(3)+"ms (max:"+this.frameTimeMax.toFixed(3)+") | Steps:"+Game.steps.toFixed(3);
-		this.frameUpdate = currentTime;
+		this.lastTime = currentTime;
 	},
 	LogFps(currentTime){
 		this.fps = this.frameCount * 1000/(currentTime-this.fpsUpdate);
@@ -2095,6 +2099,7 @@ function RenderGame(){
 		levelPosY = levelOffsetY;
 	} else {
 		let minX=0,minY=0,maxX=0,maxY=0;
+		let momX=[],momY=[],avgMomX=0,avgMomY=0;
 		for(let p = 0; p < IngamePlayers.length; p++){ //finding the middlepoint between players
 			let player = IngamePlayers[p];
 			
@@ -2109,7 +2114,11 @@ function RenderGame(){
 				minY = Math.min(player.playerPosY,minY);
 				maxY = Math.max(player.playerPosY+player.playerHeight,maxY);
 			}
+			momX.push(player.momentumX);
+			momY.push(player.momentumY);
 		}
+		avgMomX = momX.reduce((sum, val) => sum + val)/momX.length;
+		avgMomY = momY.reduce((sum, val) => sum + val)/momY.length;
 		/*if(!noCameraBounds){
 			let newAreaScale1 = Math.min(Screen.width,Screen.height)/(Math.min(Terrain.canvas.width,Terrain.canvas.height)/2);
 			let newAreaScale2 = (Screen.width*Game.aimMargin)/Math.min((maxX-minX),Terrain.canvas.width*Game.aimMargin);
@@ -2121,8 +2130,10 @@ function RenderGame(){
 		let newAreaScale3 = (Screen.height*Game.aimMargin)/(maxY-minY);
 		areaScale = AnimateValue(areaScale,Math.min(newAreaScale1,newAreaScale2,newAreaScale3),areaScaleAnimForce);
 		
-		let playersCenterX = (minX+maxX)/2;
-		let playersCenterY = (minY+maxY)/2;
+		middleOffsetX = AnimateValue(middleOffsetX,avgMomX*Game.panMultiplier/Game.speedMultiplier,areaScaleAnimForce);
+		middleOffsetY = AnimateValue(middleOffsetY,avgMomY*Game.panMultiplier/Game.speedMultiplier,areaScaleAnimForce);
+		let playersCenterX = (minX+maxX)/2+middleOffsetX;
+		let playersCenterY = (minY+maxY)/2+middleOffsetY;
 		
 		let scaledMiddlePointX = Screen.width/2/areaScale; //middlePoint/areaScale converts screen center to logical center
 		let scaledMiddlePointY = Screen.height/2/areaScale;
@@ -2378,6 +2389,14 @@ const optionsText = [
 [0,1,1,0,0,1,1,0,0,0,1,1,0,1,0,0,1,0,0,1,0,1,0,1,1,0],
 [0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 ];
+const soundVolumeText = [
+[0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+[1,0,0,0,0,1,0,0,1,0,1,0,1,1,0,0,0,1,1,0,0,0,1,0,1,0,0,1,0,0,1,0,1,0,1,0,1,1,1,1,0,0,0,1,0],
+[0,1,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+[0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1],
+[1,1,0,0,0,1,0,0,0,1,1,0,1,0,1,0,0,1,1,0,0,0,0,1,0,0,0,1,0,0,1,0,0,1,1,0,1,0,1,0,1,0,1,0,0],
+[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1]
+];
 const collisionQualityText = [
 [0,1,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0],
 [1,0,0,0,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,0,1,1,0,0,0,0,1,0,0,1,0,1,0,1,0,0,1,1,0,1,0,1,0,1,1,1,0,1,0,1],
@@ -2386,13 +2405,13 @@ const collisionQualityText = [
 [0,1,1,0,0,1,0,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,0,1,0,1,0,0,0,0,1,1,0,0,0,1,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,0,1],
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0]
 ];
-const soundVolumeText = [
-[0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-[1,0,0,0,0,1,0,0,1,0,1,0,1,1,0,0,0,1,1,0,0,0,1,0,1,0,0,1,0,0,1,0,1,0,1,0,1,1,1,1,0,0,0,1,0],
-[0,1,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
-[0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1],
-[1,1,0,0,0,1,0,0,0,1,1,0,1,0,1,0,0,1,1,0,0,0,0,1,0,0,0,1,0,0,1,0,0,1,1,0,1,0,1,0,1,0,1,0,0],
-[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1]
+const resolutionText = [
+[1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+[1,0,1,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+[1,0,1,0,1,0,1,0,1,1,0,0,1,0,0,1,0,1,0,1,0,1,1,1,0,1,0,0,1,0,0,1,1,0],
+[1,1,0,0,1,1,1,0,1,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,0,1,0,1,0,1,0,1,0,1],
+[1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,1,0,0,1,0,1,0,1,0,1,0,1],
+[1,0,1,0,0,1,1,0,1,1,0,0,1,0,0,1,0,0,1,1,0,0,1,1,0,1,0,0,1,0,0,1,0,1]
 ];
 const guiScaleText = [
 [0,1,1,1,0,1,0,1,0,1,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0],
@@ -2792,10 +2811,11 @@ options:{
 		} //StickAim test area
 	],
 	label:[
-		{data:collisionQualityText, xDiff:-430, yDiff:-48, textWidth:5, textHeight:4},
-		{data:soundVolumeText, xDiff:-430, yDiff:11, textWidth:6, textHeight:5},
-		{data:guiScaleText, xDiff:-251, yDiff:78, textWidth:4, textHeight:3},
-		{data:vsyncText, xDiff:-430, yDiff:78, textWidth:4, textHeight:3},
+		{data:soundVolumeText, xDiff:-382, yDiff:-63, textWidth:5, textHeight:4},
+		{data:resolutionText, xDiff:-316, yDiff:-14, textWidth:5, textHeight:4},
+		{data:collisionQualityText, xDiff:-430, yDiff:35, textWidth:5, textHeight:4},
+		{data:guiScaleText, xDiff:-251, yDiff:88, textWidth:4, textHeight:3},
+		{data:vsyncText, xDiff:-430, yDiff:88, textWidth:4, textHeight:3},
 		{data:upKeyText, xDiff:152, yDiff:-130, textWidth:4, textHeight:3},
 		{data:downKeyText, xDiff:102, yDiff:-86, textWidth:4, textHeight:3},
 		{data:leftKeyText, xDiff:122, yDiff:-46, textWidth:4, textHeight:3},
@@ -2812,24 +2832,31 @@ options:{
 		{data:positiveAimYText, xDiff:-270, yDiff:251, textWidth:4, textHeight:3}
 	],
 	adjustbox:[
-		{data:Adjust, get value(){return Game.updateInterval;}, set value(v){Game.updateInterval=v;UpdateMultiplier(Game.updateInterval);}, mod:-1, min:1, max:5, xDiff:-103, yDiff:-62, width:161, height:57, textXoffset:4, textYoffset:4,
+		{data:Adjust, prop:[Game,"soundVolume"], mod:0.01, min:0, max:1, xDiff:-103, yDiff:-69, width:119, height:42, textXoffset:4, textYoffset:4, textWidth:7, textHeight:6,
 			number:[
-				{data:Numbers[0], xDiff:90, textYoffset:4},
-				{data:Numbers[0], xDiff:54, textYoffset:4},
-				{data:Numbers[1], xDiff:17, textYoffset:4}
+				{data:Numbers[0], xDiff:67, textYoffset:4, textWidth:7, textHeight:6},
+				{data:Numbers[0], xDiff:40, textYoffset:4, textWidth:7, textHeight:6},
+				{data:Numbers[1], xDiff:13, textYoffset:4, textWidth:7, textHeight:6}
 			]
-		}, //collisionQuality
-		{data:Adjust, prop:[Game,"soundVolume"], mod:0.01, min:0, max:1, xDiff:-103, yDiff:0, width:161, height:57, textXoffset:4, textYoffset:4,
+		},
+		{data:Adjust, get value(){return Screen.pixelScale;}, set value(v){Screen.pixelScale=v;ScreenSize();}, min:1, xDiff:-103, yDiff:-20, width:119, height:42, textXoffset:4, textYoffset:4, textWidth:7, textHeight:6,
 			number:[
-				{data:Numbers[0], xDiff:90, textYoffset:4},
-				{data:Numbers[0], xDiff:54, textYoffset:4},
-				{data:Numbers[1], xDiff:17, textYoffset:4}
+				{data:Numbers[0], xDiff:67, textYoffset:4, textWidth:7, textHeight:6},
+				{data:Numbers[0], xDiff:40, textYoffset:4, textWidth:7, textHeight:6},
+				{data:Numbers[1], xDiff:13, textYoffset:4, textWidth:7, textHeight:6}
 			]
-		}
+		}, //resolution
+		{data:Adjust, get value(){return Game.updateInterval;}, set value(v){Game.updateInterval=v;UpdateMultiplier(Game.updateInterval);}, mod:-1, min:1, max:5, xDiff:-103, yDiff:29, width:119, height:42, textXoffset:4, textYoffset:4, textWidth:7, textHeight:6,
+			number:[
+				{data:Numbers[0], xDiff:67, textYoffset:4, textWidth:7, textHeight:6},
+				{data:Numbers[0], xDiff:40, textYoffset:4, textWidth:7, textHeight:6},
+				{data:Numbers[1], xDiff:13, textYoffset:4, textWidth:7, textHeight:6}
+			]
+		} //collisionQuality
 	],
 	checkbox:[
-		{data:Enable, prop:[Screen,"guiScaleOn"], xDiff:-103, yDiff:71, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5},
-		{data:Enable, prop:[Screen,"vsync"], xDiff:-317, yDiff:71, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5}
+		{data:Enable, get value(){return Screen.guiScaleOn;}, set value(v){Screen.guiScaleOn=v;ScreenSize();}, xDiff:-103, yDiff:81, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5},
+		{data:Enable, get value(){return Screen.vsync;}, set value(v){Screen.vsync=v;ScreenSize();}, xDiff:-317, yDiff:81, width:42, height:37, textXoffset:4, textYoffset:4, textWidth:6, textHeight:5}
 	],
 	inputfield:[ //keyBind inputfield
 		{data:null, inputType:Input.up, xDiff:200, yDiff:-139, width:199, height:40, pTextAlign:"right", pFontSize:30, pTextXoffset:-6, pTextYoffset:-10,
@@ -3620,10 +3647,8 @@ function Options(){
 				Option.active = Option.selected;
 				Option.active.selectedItem = Option.active.activeItem;
 				ShowMenu(Option.active);
-			} else if(Option.selected.type==="checkbox"){
+			} else if(Option.selected.type==="checkbox")
 				Option.selected.value=!Option.selected.value;
-				ScreenSize();
-			}
 		} else if(Option.active===GUI.options.dropdown[0]){
 			let selectedInputMethod = Option.active.selectedItem;
 			if(selectedInputMethod!==Option.active.activeItem && Option.selected!==Option.cancel){ //if 1st condition is removed: always resets current keyBindings when any inputMethod is chosen
@@ -3651,10 +3676,11 @@ function Options(){
 			Option.selected = GUI.options.adjustbox[0]; //if gamepad is disconnected while an inputfield is selected
 		
 		for(let i = 0; i < GUI.options.label.length; i++)
-			GUI.options.label[i].guiState = (Players[KeyBind.player].inputMethod!==-1 || i<4) ? GUIstate.Enabled : GUIstate.Disabled;
+			GUI.options.label[i].guiState = (Players[KeyBind.player].inputMethod!==-1 || i<5) ? GUIstate.Enabled : GUIstate.Disabled;
 		
-		SetAdjustNumber(GUI.options.adjustbox[0], Math.floor((6-Game.updateInterval)*20));
-		SetAdjustNumber(GUI.options.adjustbox[1], Math.round(Game.soundVolume*100));
+		SetAdjustNumber(GUI.options.adjustbox[0], Math.round(Game.soundVolume*100));
+		SetAdjustNumber(GUI.options.adjustbox[1], Screen.pixelScale);
+		SetAdjustNumber(GUI.options.adjustbox[2], Math.floor((6-Game.updateInterval)*20));
 		
 		for(let checkbox of GUI.options.checkbox)
 			checkbox.data = (checkbox.value) ? Enable : Disable;
@@ -4272,18 +4298,12 @@ function DebugInfo(){
 	guiRender.fillStyle="#00FF00";
 	guiRender.font="15px Arial";
 	
-	let xPos=4, yPos=20, yStep=20;
+	let xPos=4, yPos=0, yStep=20;
 	guiRender.textAlign="left";
 	
 	if(Game.started && Menu.active===null){
-		guiRender.fillText(
-			"Level: X:"+levelPosX.toFixed(1)+
-			"  Y:"+levelPosY.toFixed(1)+
-			"  Width:"+Terrain.canvas.width+
-			"  Height:"+Terrain.canvas.height+
-			"  [I/K|J/L]AreaScale: "+areaScale.toFixed(4)+
-			((Game.fixedCamera) ? "(fixed)" : "("+1*Game.aimArea.toFixed(2)+"|"+1*Game.aimMargin.toFixed(4)+")"),
-			xPos,yPos);
+		guiRender.fillText("Level: X:"+levelPosX.toFixed(1)+"  Y:"+levelPosY.toFixed(1)+"  Width:"+Terrain.canvas.width+"  Height:"+Terrain.canvas.height,xPos,yPos+=yStep);
+		guiRender.fillText("[I/K|J/L]areaScale: "+areaScale.toFixed(4)+((Game.fixedCamera) ? "(fixed)" : "("+1*Game.aimArea.toFixed(2)+"|"+1*Game.aimMargin.toFixed(4)+")  [U/O]panMultiplier: "+Game.panMultiplier),xPos,yPos+=yStep);
 		
 		let pCount = 0;
 		for(let p = 1; p < Players.length; p++){
@@ -4291,7 +4311,7 @@ function DebugInfo(){
 			if(!player.joined)
 				continue;
 			
-			yPos = pCount*90+30;
+			yPos = pCount*90+50;
 			guiRender.fillText("P"+p+") X:"+player.playerPosX.toFixed(1)+"  Y:"+player.playerPosY.toFixed(1)+"  Width:"+player.playerWidth+"  Height:"+player.playerHeight+"  SizeLevel:"+player.sizeLevel,xPos,yPos+=yStep);
 			guiRender.fillText("PixelCount:"+player.pixelCount.toFixed(0)+"  PixelCountMax:"+player.pixelCountMax+"  BallCount:"+player.Balls.length,xPos+36,yPos+=yStep);
 			guiRender.fillText("Momentum: X:"+player.momentumX.toFixed(3)+"  Y:"+player.momentumY.toFixed(3)+"  Rotation:"+player.rotMomentum.toFixed(3),xPos+36,yPos+=yStep);
@@ -4308,8 +4328,8 @@ function DebugInfo(){
 	xPos = Screen.scaledWidth-4; yPos = 20;
 	guiRender.textAlign="right";
 	guiRender.fillText("[N/M]pixelScale: "+Screen.pixelScale+"%("+Screen.pixelRatio+") [X]guiScale: "+Screen.guiScale.toFixed(4)+" [Z]smooth: "+Screen.smoothing+" [C]noClear: "+Screen.noClear+" [V]vsync: "+Screen.vsync,xPos,yPos+=yStep);
-	guiRender.fillText("[Home/End]UpdateInterval: "+Game.updateInterval+"ms",xPos,yPos+=yStep);
-	guiRender.fillText("[PgUp/PgDn]SpeedMultiplier: "+Game.speedMultiplier+"x",xPos,yPos+=yStep);
+	guiRender.fillText("[Home/End]updateInterval: "+Game.updateInterval+"ms",xPos,yPos+=yStep);
+	guiRender.fillText("[PgUp/PgDn]speedMultiplier: "+Game.speedMultiplier+"x",xPos,yPos+=yStep);
 	guiRender.fillText("Mode: "+Object.keys(GameMode)[Game.mode]+" Type: "+Object.keys(GameType)[Game.type],xPos,yPos+=yStep);
 	
 	yPos = Screen.scaledHeight-270;
@@ -4395,6 +4415,7 @@ function LogoLoad(){
 function SaveGame(){ //add exeption?: Can not save
 	localStorage.setItem('vsync',Screen.vsync);
 	localStorage.setItem('guiScaleOn',Screen.guiScaleOn);
+	localStorage.setItem('pixelScale',Screen.pixelScale);
 	localStorage.setItem('updateInterval',Game.updateInterval);
 	localStorage.setItem('soundVolume',Game.soundVolume);
 	localStorage.setItem('KeyBindings',JSON.stringify(KeyBindings));
@@ -4409,6 +4430,7 @@ function SaveGame(){ //add exeption?: Can not save
 function LoadGame(){
 	let loadedVsync = localStorage.getItem('vsync');
 	let loadedGuiScaleOn = localStorage.getItem('guiScaleOn');
+	let loadedPixelScale = localStorage.getItem('pixelScale');
 	let loadedUpdateInterval = localStorage.getItem('updateInterval');
 	let loadedSoundVolume = localStorage.getItem('soundVolume');
 	let loadedKeyBindings = JSON.parse(localStorage.getItem('KeyBindings'));
@@ -4419,6 +4441,13 @@ function LoadGame(){
 	
 	if(loadedGuiScaleOn!==null)
 		Screen.guiScaleOn = (loadedGuiScaleOn==="true");
+	
+	if(loadedPixelScale!==null){
+		loadedPixelScale = Number(loadedPixelScale);
+		if(!Number.isNaN(loadedPixelScale)){
+			Screen.pixelScale = loadedPixelScale;
+		}
+	}
 	
 	if(loadedUpdateInterval!==null){
 		loadedUpdateInterval = Number(loadedUpdateInterval);
@@ -4576,8 +4605,9 @@ function GameLoop(){ //main loop
 	CheckGamepads(); //polling gamepad inputs
 	
 	let currentTime = TimeNow();
-	if((!Game.frameHold && (currentTime-Game.lastTime>=Game.updateInterval)) || Game.frameStep){ //maximum UpdateRate (1ms)
-		Game.steps = (Game.frameStep) ? 1 : (currentTime-Game.lastTime)/Game.updateInterval + (Game.steps%1);
+	let deltaTime = Math.min(currentTime-Game.lastTime,10000); //10 second limit
+	if((!Game.frameHold && (deltaTime>=Game.updateInterval)) || Game.frameStep){ //maximum UpdateRate (1ms)
+		Game.steps = (Game.frameStep) ? 1 : deltaTime/Game.updateInterval + (Game.steps%1);
 		Game.lastTime = currentTime;
 		Game.frameStep = false;
 		
