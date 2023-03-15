@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2023)
-const version = "0x4D0";
+const version = "0x4D1";
 
 function TimeNow(){
 	//return Date.now();
@@ -819,7 +819,7 @@ gameCanvas.addEventListener('mousemove', function(event){
 	UpdateMousePos(event.clientX-this.offsetLeft,event.clientY-this.offsetTop);
 	if(KeyBind.inProgress){
 		if(Players[KeyBind.player].inputMethod===0){
-			if((Mouse.x-Mouse.startX < -50 && Mouse.x < Screen.scaledWidth*0.1) || (Mouse.x-Mouse.startX > 50 && Mouse.x > Screen.scaledWidth*0.9)){
+			if((Mouse.x-Mouse.startX < -50 && Mouse.x < Screen.scaledWidth*0.1) || (Mouse.x-Mouse.startX > 50 && Mouse.x >= Screen.scaledWidth*0.9)){
 				let axisSign = Math.sign(Mouse.x-Mouse.startX)===1 ? "+" : "-";
 				let axisName = axisSign + "MouseX";
 				let axisCode = axisSign + "mX";
@@ -827,7 +827,7 @@ gameCanvas.addEventListener('mousemove', function(event){
 				SetKeyBind(axisName, axisCode);
 				
 				StopKeyBind();
-			} else if((Mouse.y-Mouse.startY < -50 && Mouse.y < Screen.scaledHeight*0.1) || (Mouse.y-Mouse.startY > 50 && Mouse.y > Screen.scaledHeight*0.9)){
+			} else if((Mouse.y-Mouse.startY < -50 && Mouse.y < Screen.scaledHeight*0.1) || (Mouse.y-Mouse.startY > 50 && Mouse.y >= Screen.scaledHeight*0.9)){
 				let axisSign = Math.sign(Mouse.y-Mouse.startY)===1 ? "+" : "-";
 				let axisName = axisSign + "MouseY";
 				let axisCode = axisSign + "mY";
@@ -3340,11 +3340,11 @@ function CheckMouse(clicked){
 		if(guiElement.type === "adjustbox" && !Mouse.drag && (Option.active===null || Option.active===guiElement)){
 			if(clicked){
 				if(MouseOver(guiElement)){
-					if(Mouse.x>guiX && Mouse.x<guiX+guiElement.width*0.25){
+					if(Mouse.x>=guiX && Mouse.x<guiX+guiElement.width*0.25){
 						SetAdjustBox(CurrentMenu(),guiElement,-1);
 						return false;
 					}
-					if(Mouse.x>guiX+guiElement.width*0.75 && Mouse.x<guiX+guiElement.width){
+					if(Mouse.x>=guiX+guiElement.width*0.75 && Mouse.x<guiX+guiElement.width){
 						SetAdjustBox(CurrentMenu(),guiElement,1);
 						return false;
 					}
@@ -3376,8 +3376,9 @@ function CheckMouse(clicked){
 				} else {
 					if(MouseOver(guiElement)){
 						Option.selected = guiElement;
-						if(Mouse.x>guiX+((guiElement.width-DzSlider.large)*KeyBindings[KeyBind.player][guiElement.inputType].deadzone))
-						if(Mouse.x<guiX+((guiElement.width-DzSlider.large)*KeyBindings[KeyBind.player][guiElement.inputType].deadzone)+DzSlider.large){
+						let dzSliderPosX = (guiElement.width-DzSlider.large)*KeyBindings[KeyBind.player][guiElement.inputType].deadzone;
+						if(Mouse.x>=guiX+dzSliderPosX)
+						if(Mouse.x<guiX+dzSliderPosX+DzSlider.large){
 							DzSlider.target = DzSlider.large;
 							if(clicked)
 								Mouse.drag = true;
