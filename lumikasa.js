@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2023)
-const version = "0x4D1";
+const version = "0x4D2";
 
 function TimeNow(){
 	//return Date.now();
@@ -2205,20 +2205,20 @@ function RenderGame(){
 	}
 	
 	if(IngamePlayers.length>1){
-		gameRender.lineWidth = 3*Screen.guiScale;
-		gameRender.setLineDash([]);
+		guiRender.lineWidth = 3;
+		guiRender.setLineDash([]);
 	}
 	for(let player of IngamePlayers){
 		if(player.invulnerability > 0)
 			gameRender.globalAlpha = 0.5;
 		gameRender.drawImage(player.canvas,0,0,player.playerWidth,player.playerHeight,player.playerPosX*areaScale,player.playerPosY*areaScale,player.playerWidth*areaScale,player.playerHeight*areaScale);
-		if(IngamePlayers.length>1){
-			gameRender.beginPath();
-			gameRender.arc((player.playerPosX+player.playerRadius)*areaScale,(player.playerPosY+player.playerRadius)*areaScale,(player.playerRadius)*areaScale,0,2*Math.PI);
-			gameRender.strokeStyle = PlayerColor[player.number].color;
-			gameRender.stroke();
-		}
 		gameRender.globalAlpha = 1;
+		if(IngamePlayers.length>1){
+			guiRender.beginPath();
+			guiRender.arc((player.playerPosX+player.playerRadius)*areaScale/Screen.guiScale,(player.playerPosY+player.playerRadius)*areaScale/Screen.guiScale,(player.playerRadius)*areaScale/Screen.guiScale,0,2*Math.PI);
+			guiRender.strokeStyle = PlayerColor[player.number].color;
+			guiRender.stroke();
+		}
 	}
 	for(let p = 1; p < Players.length; p++){
 		let player = Players[p];
@@ -2228,28 +2228,27 @@ function RenderGame(){
 		for(let ball of player.Balls)
 			gameRender.drawImage(ball.canvas,0,0,ball.canvas.width,ball.canvas.height,ball.ballPosX*areaScale,ball.ballPosY*areaScale,ball.canvas.width*areaScale,ball.canvas.height*areaScale);
 	}
-	gameRender.lineWidth = 3*Screen.guiScale;
-	gameRender.setLineDash([5*Screen.guiScale,10*Screen.guiScale]);
+	guiRender.lineWidth = 3;
+	guiRender.setLineDash([5,10]);
 	for(let player of IngamePlayers){
 		if(!player.aimCentered){
-			gameRender.beginPath();
-			gameRender.moveTo((player.playerPosX+player.playerRadius)*areaScale,(player.playerPosY+player.playerRadius)*areaScale);
-			gameRender.lineTo(player.aimX*areaScale,player.aimY*areaScale);
-			gameRender.strokeStyle = PlayerColor[player.number].color;
-			gameRender.stroke();
+			guiRender.beginPath();
+			guiRender.moveTo((player.playerPosX+player.playerRadius)*areaScale/Screen.guiScale,(player.playerPosY+player.playerRadius)*areaScale/Screen.guiScale);
+			guiRender.lineTo(player.aimX*areaScale/Screen.guiScale,player.aimY*areaScale/Screen.guiScale);
+			guiRender.strokeStyle = PlayerColor[player.number].color;
+			guiRender.stroke();
 			let crossOffsetX = Crosshair[player.number].xOffset;
 			let crossOffsetY = Crosshair[player.number].yOffset;
-			gameRender.drawImage(Crosshair[player.number],0,0,crossOffsetX*2,crossOffsetY*2,(player.aimX*areaScale)-crossOffsetX*Screen.guiScale,(player.aimY*areaScale)-crossOffsetY*Screen.guiScale,crossOffsetX*2*Screen.guiScale,crossOffsetY*2*Screen.guiScale); //crosshair scales with resolution
-			//gameRender.drawImage(Crosshair[player.number],(player.aimX*areaScale)-crossOffsetX,(player.aimY*areaScale)-crossOffsetY); //crosshair does not scale with resolution
+			guiRender.drawImage(Crosshair[player.number],(player.aimX*areaScale/Screen.guiScale)-crossOffsetX,(player.aimY*areaScale/Screen.guiScale)-crossOffsetY);
 		}
 	}
 	if(Game.mode===GameMode.battle){
 		for(let player of IngamePlayers){
 			if(player.statusVisibility > 0){
-				gameRender.fillStyle = PlayerColor[player.number].color;
-				gameRender.font = Math.max(player.playerHeight*areaScale,30)+"px Arial";
-				gameRender.textAlign = "center";
-				gameRender.fillText(((Game.type===GameType.score) ? player.score : player.lives),(player.playerPosX+player.playerRadius)*areaScale,player.playerPosY*areaScale);
+				guiRender.fillStyle = PlayerColor[player.number].color;
+				guiRender.font = Math.max(player.playerHeight*areaScale,30)+"px Arial";
+				guiRender.textAlign = "center";
+				guiRender.fillText(((Game.type===GameType.score) ? player.score : player.lives),(player.playerPosX+player.playerRadius)*areaScale/Screen.guiScale,player.playerPosY*areaScale/Screen.guiScale);
 			}
 		}
 	}
@@ -3766,6 +3765,8 @@ function Pause(){
 		}
 	}
 	
+	RenderGame();
+	
 	LogoDraw();
 	
 	RenderElements(GUI.pause);
@@ -3891,6 +3892,8 @@ function Results(){
 			InitializeGame(Game.levelIndex);
 		}
 	}
+	
+	RenderGame();
 	
 	RenderMenu(GUI.results.title);
 	
