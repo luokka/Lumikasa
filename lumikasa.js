@@ -1,7 +1,7 @@
 ﻿'use strict';
 
-//Lumikasa source code (Luokkanen Janne, 2015-2023)
-const version = "0x4D2";
+//Lumikasa source code (Luokkanen Janne, 2015-2025)
+const version = "0x4D3";
 
 function TimeNow(){
 	//return Date.now();
@@ -264,6 +264,7 @@ const Screen = {
 	scaledHeight:0,
 	scaledWidthHalf:0,
 	scaledHeightHalf:0,
+	deviceRatio:0,
 	pixelRatio:0,
 	pixelScale:100,
 	guiScale:1,
@@ -515,7 +516,8 @@ function PlaySound(sound){
 	}
 }
 function ScreenSize(){ //Initialize game screen and update sizes (if screensize changes...)
-	Screen.pixelRatio = Math.max(window.devicePixelRatio*(Screen.pixelScale/100),1/gameCanvas.offsetWidth,1/gameCanvas.offsetHeight);
+	Screen.deviceRatio = window.devicePixelRatio;
+	Screen.pixelRatio = Math.max(Screen.deviceRatio*(Screen.pixelScale/100),1/gameCanvas.offsetWidth,1/gameCanvas.offsetHeight);
 	Screen.width = gameCanvas.offsetWidth*Screen.pixelRatio;
 	Screen.height = gameCanvas.offsetHeight*Screen.pixelRatio;
 	
@@ -698,9 +700,9 @@ function SetInput(inputType,inputState,player,value){
 	else if(inputType === Input.confirm)
 		ConfirmKey(player,inputState);
 	else if(inputType === Input.cancel)
-		CancelKey(player,inputState);	
+		CancelKey(player,inputState);
 	else if(inputType === Input.pause)
-		PauseKey(player,inputState);		
+		PauseKey(player,inputState);
 	else if(inputType === Input.aimXneg){
 		if(inputState)
 			Aim(player,-value,null);
@@ -3575,21 +3577,24 @@ function Battle(){
 			for(let i = 0; i < Stages.length; i++){ //rendering stagebuttons
 				let guiElement = GUI.battle.stagebutton[i];
 				
-				let border = guiElement.border;
+				let iconGap = 2;
 				
-				let iconBgWidth = (bgElement.width-border*stageColumnCount)/stageColumnCount;
-				let iconBgHeight = (bgElement.height-border*stageColumnCount)/stageColumnCount;
+				let iconBgWidth = (bgElement.width-iconGap*stageColumnCount)/stageColumnCount;
+				let iconBgHeight = (bgElement.height-iconGap*stageColumnCount)/stageColumnCount;
 				guiElement.width = iconBgWidth;
 				guiElement.height = iconBgHeight;
 				
-				let bgPosX = (iconBgWidth+border)*i - (iconBgWidth+border)*stageColumnCount*Math.floor(i/stageColumnCount);
-				let bgPosY = (iconBgHeight+border) * Math.floor(i/stageColumnCount) - (iconBgHeight+border)*stageRowStep;
+				let bgPosX = (iconBgWidth+iconGap)*i - (iconBgWidth+iconGap)*stageColumnCount*Math.floor(i/stageColumnCount);
+				let bgPosY = (iconBgHeight+iconGap) * Math.floor(i/stageColumnCount) - (iconBgHeight+iconGap)*stageRowStep;
 				guiElement.xDiff = bgPosX;
 				guiElement.yDiff = bgPosY;
 				
 				if(i >= startIndex && i < endIndex){ //only rendering visible icons
-					let iconWidth = Math.min(iconBgHeight*(Stages[i].naturalWidth/Stages[i].naturalHeight),iconBgWidth-border*2);
-					let iconHeight = Math.min(iconBgWidth*(Stages[i].naturalHeight/Stages[i].naturalWidth),iconBgHeight-border*2);
+					let iconWithoutBorderWidth = iconBgWidth-guiElement.border*2;
+					let iconWithoutBorderHeight = iconBgHeight-guiElement.border*2;
+					
+					let iconWidth = Math.min(iconWithoutBorderHeight*(Stages[i].naturalWidth/Stages[i].naturalHeight),iconWithoutBorderWidth);
+					let iconHeight = Math.min(iconWithoutBorderWidth*(Stages[i].naturalHeight/Stages[i].naturalWidth),iconWithoutBorderHeight);
 					
 					let iconPosX = bgPosX+(iconBgWidth-iconWidth)/2;
 					let iconPosY = bgPosY+(iconBgHeight-iconHeight)/2;
@@ -4331,7 +4336,7 @@ function DebugInfo(){
 	
 	xPos = Screen.scaledWidth-4; yPos = 20;
 	guiRender.textAlign="right";
-	guiRender.fillText("[N/M]pixelScale: "+Screen.pixelScale+"%("+Screen.pixelRatio+") [X]guiScale: "+Screen.guiScale.toFixed(4)+" [Z]smooth: "+Screen.smoothing+" [C]noClear: "+Screen.noClear+" [V]vsync: "+Screen.vsync,xPos,yPos+=yStep);
+	guiRender.fillText("[N/M]pixelScale: "+Screen.pixelScale+"%(x"+Screen.deviceRatio+";"+Screen.pixelRatio+") [X]guiScale: "+Screen.guiScale.toFixed(4)+" [Z]smooth: "+Screen.smoothing+" [C]noClear: "+Screen.noClear+" [V]vsync: "+Screen.vsync,xPos,yPos+=yStep);
 	guiRender.fillText("[Home/End]updateInterval: "+Game.updateInterval+"ms",xPos,yPos+=yStep);
 	guiRender.fillText("[PgUp/PgDn]speedMultiplier: "+Game.speedMultiplier+"x",xPos,yPos+=yStep);
 	guiRender.fillText("Mode: "+Object.keys(GameMode)[Game.mode]+" Type: "+Object.keys(GameType)[Game.type],xPos,yPos+=yStep);
