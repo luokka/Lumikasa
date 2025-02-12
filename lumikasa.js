@@ -1,7 +1,7 @@
 ﻿'use strict';
 
 //Lumikasa source code (Luokkanen Janne, 2015-2025)
-const version = "0x4D3";
+const version = "0x4D4";
 
 function TimeNow(){
 	//return Date.now();
@@ -2798,7 +2798,7 @@ battle:{
 	],
 	button:[
 		{data:Minus, xDiff:-140, yDiff:-147, width:60, height:52, textXoffset:3, textYoffset:2},
-		{data:Plus, xDiff:377, yDiff:-147, width:60, height:52, textXoffset:3, textYoffset:2}
+		{data:Plus, xDiff:378, yDiff:-147, width:60, height:52, textXoffset:3, textYoffset:2}
 	],
 	stagebutton:[
 	]
@@ -3568,6 +3568,7 @@ function Battle(){
 			
 			tempCanvas.width = bgElement.width*Screen.guiScale; //Screen.guiScale keeps stageIcons sharp in high screen resolutions
 			tempCanvas.height = bgElement.height*Screen.guiScale;
+			tempRender.scale(Screen.guiScale,Screen.guiScale);
 			
 			if(!Menu.animating)
 				stageRowStep = AnimateValue(stageRowStep,stageRow);
@@ -3600,12 +3601,12 @@ function Battle(){
 					let iconPosY = bgPosY+(iconBgHeight-iconHeight)/2;
 					
 					tempRender.fillStyle=(Option.selected===guiElement) ? Color.optionBorderHgl : Color.optionBorder;
-					tempRender.fillRect(bgPosX*Screen.guiScale,bgPosY*Screen.guiScale,iconBgWidth*Screen.guiScale,iconBgHeight*Screen.guiScale);
+					tempRender.fillRect(bgPosX,bgPosY,iconBgWidth,iconBgHeight);
 					
 					tempRender.fillStyle="#000000";
-					tempRender.fillRect(iconPosX*Screen.guiScale,iconPosY*Screen.guiScale,iconWidth*Screen.guiScale,iconHeight*Screen.guiScale);
+					tempRender.fillRect(iconPosX,iconPosY,iconWidth,iconHeight);
 					
-					tempRender.drawImage(Stages[i],iconPosX*Screen.guiScale,iconPosY*Screen.guiScale,iconWidth*Screen.guiScale,iconHeight*Screen.guiScale);
+					tempRender.drawImage(Stages[i],iconPosX,iconPosY,iconWidth,iconHeight);
 				}
 			}
 			
